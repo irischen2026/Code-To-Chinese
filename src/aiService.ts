@@ -1,0 +1,359 @@
+import { loadApiKeys } from "./store";
+
+const GENERAL_PROMPT = `你是一个专业、明快、轻盈且乐于助人的极客小助手（小天使）。请用最平实易懂的语言向我解释机器在干什么。
+【称呼禁令】绝对禁止使用“兄弟”、“老铁”等任何江湖气息重的称呼；当提到我时，请省略称呼，或者使用“这里小天使帮你...”这种中性、亲切的说法，亦可以“小天使”的身份自然叙事。若在输出中检测到“兄弟”一词，必须强制重构并重写回答。
+【逻辑与表意】禁止任何技术术语，禁止指出 Bug，只负责用大白话解释代码表意。提到重点代码或高亮词使用方括号 [ ] 括起来。`;
+
+const EXPERT_PROMPT = `你一位代码审计专家，同时也是专业、明快、轻盈的极客小助手。你必须指出代码中的逻辑缺陷、性能瓶颈及安全风险。
+【称呼禁令】绝对禁止使用“兄弟”、“老铁”等任何江湖气息重的称呼；当提到我时，请省略称呼，或者使用“这里小天使帮你...”这种中性、亲切的说法。若在输出中检测到“兄弟”一词，必须强制重构并重写回答。
+【输出格式】你可以使用深度技术术语，且必须遵循：【逻辑分析】+【已知隐患】+【改进方案】的格式进行输出。提到重点代码或高亮词使用方括号 [ ] 括起来。`;
+
+export interface ExplanationResult {
+  text: string;
+  totalTokens?: number;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+async function getActiveApiKey(activeModel: string): Promise<string> {
+  const keys = await loadApiKeys();
+  if (!keys) {
+    throw new Error("未检测到 API Key，请先进入配置页激活小天使！");
+  }
+
+  let apiKey = "";
+  if (activeModel === "gemini") apiKey = keys.gemini || "";
+  else if (activeModel === "deepseek") apiKey = keys.deepseek || "";
+  else if (activeModel === "openai") apiKey = keys.openai || "";
+
+  apiKey = apiKey.trim().replace(/[^\x21-\x7E]/g, "");
+  if (!apiKey) {
+    throw new Error(`当前选择的模型 ${activeModel.toUpperCase()} 未配置 API Key，请进入设置配置！`);
+  }
+  return apiKey;
+}
+
+export async function fetchExplanation(text: string, mode: "general" | "expert" = "general"): Promise<ExplanationResult> {
+  const prompt = mode === "expert" ? EXPERT_PROMPT : GENERAL_PROMPT;
+  const keys = await loadApiKeys();
+  const activeModel = keys?.defaultModel || "gemini";
+  const apiKey = await getActiveApiKey(activeModel);
+
+  if (activeModel === "gemini") {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const payload = {
+      systemInstruction: { parts: [{ text: prompt }] },
+      contents: [{ role: "user", parts: [{ text: text }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 800 }
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `Gemini API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText) throw new Error("Gemini API 返回了空内容");
+
+    return {
+      text: resultText,
+      totalTokens: data.usageMetadata?.totalTokenCount
+    };
+  } 
+  
+  if (activeModel === "deepseek") {
+    const url = "https://api.deepseek.com/chat/completions";
+    const payload = {
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: text }
+      ],
+      temperature: 0.5,
+      max_tokens: 800
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `DeepSeek API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content;
+    if (!resultText) throw new Error("DeepSeek API 返回了空内容");
+
+    return {
+      text: resultText,
+      totalTokens: data.usage?.total_tokens
+    };
+  }
+
+  if (activeModel === "openai") {
+    const url = "https://api.openai.com/v1/chat/completions";
+    const payload = {
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: text }
+      ],
+      temperature: 0.5,
+      max_tokens: 800
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `OpenAI API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content;
+    if (!resultText) throw new Error("OpenAI API 返回了空内容");
+
+    return {
+      text: resultText,
+      totalTokens: data.usage?.total_tokens
+    };
+  }
+
+  throw new Error(`未知的模型类型: ${activeModel}`);
+}
+
+export async function fetchChatExplanation(history: ChatMessage[], mode: "general" | "expert" = "general"): Promise<ExplanationResult> {
+  const prompt = mode === "expert" ? EXPERT_PROMPT : GENERAL_PROMPT;
+  const keys = await loadApiKeys();
+  const activeModel = keys?.defaultModel || "gemini";
+  const apiKey = await getActiveApiKey(activeModel);
+
+  if (activeModel === "gemini") {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const payload = {
+      systemInstruction: { parts: [{ text: prompt }] },
+      contents: history.map((msg) => ({
+        role: msg.role === "user" ? "user" : "model",
+        parts: [{ text: msg.content }]
+      })),
+      generationConfig: { temperature: 0.5, maxOutputTokens: 800 }
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `Gemini API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText) throw new Error("Gemini API 返回了空内容");
+
+    return {
+      text: resultText,
+      totalTokens: data.usageMetadata?.totalTokenCount
+    };
+  }
+
+  if (activeModel === "deepseek") {
+    const url = "https://api.deepseek.com/chat/completions";
+    const payload = {
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: prompt },
+        ...history.map((msg) => ({ role: msg.role, content: msg.content }))
+      ],
+      temperature: 0.5,
+      max_tokens: 800
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `DeepSeek API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content;
+    if (!resultText) throw new Error("DeepSeek API 返回了空内容");
+
+    return {
+      text: resultText,
+      totalTokens: data.usage?.total_tokens
+    };
+  }
+
+  if (activeModel === "openai") {
+    const url = "https://api.openai.com/v1/chat/completions";
+    const payload = {
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: prompt },
+        ...history.map((msg) => ({ role: msg.role, content: msg.content }))
+      ],
+      temperature: 0.5,
+      max_tokens: 800
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `OpenAI API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content;
+    if (!resultText) throw new Error("OpenAI API 返回了空内容");
+
+    return {
+      text: resultText,
+      totalTokens: data.usage?.total_tokens
+    };
+  }
+
+  throw new Error(`未知的模型类型: ${activeModel}`);
+}
+
+export async function verifyIntent(text: string): Promise<boolean> {
+  const keys = await loadApiKeys();
+  const activeModel = keys?.defaultModel || "gemini";
+  const apiKey = await getActiveApiKey(activeModel);
+
+  const gatekeeperSystemPrompt = "你是一个极度严格的意图分类器。只有当用户选中的文本属于计算机编程代码、软件工程设计、架构逻辑或技术开发范畴时，才输出 YES，否则必须输出 NO。请仅输出 YES 或 NO，不要包含任何标点或额外文字。";
+
+  if (activeModel === "gemini") {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const payload = {
+      systemInstruction: { parts: [{ text: gatekeeperSystemPrompt }] },
+      contents: [{ role: "user", parts: [{ text: text }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 5 }
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `Gemini API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText) return false;
+    return resultText.trim().toUpperCase().includes("YES");
+  } 
+  
+  if (activeModel === "deepseek") {
+    const url = "https://api.deepseek.com/chat/completions";
+    const payload = {
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: gatekeeperSystemPrompt },
+        { role: "user", content: text }
+      ],
+      temperature: 0.1,
+      max_tokens: 5
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `DeepSeek API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content;
+    if (!resultText) return false;
+    return resultText.trim().toUpperCase().includes("YES");
+  }
+
+  if (activeModel === "openai") {
+    const url = "https://api.openai.com/v1/chat/completions";
+    const payload = {
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: gatekeeperSystemPrompt },
+        { role: "user", content: text }
+      ],
+      temperature: 0.1,
+      max_tokens: 5
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `OpenAI API 请求失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content;
+    if (!resultText) return false;
+    return resultText.trim().toUpperCase().includes("YES");
+  }
+
+  throw new Error(`未知的模型类型: ${activeModel}`);
+}

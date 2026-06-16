@@ -1,0 +1,826 @@
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Press+Start+2P&family=Outfit:wght@300;400;600&display=swap');
+
+/* Reset and base page layout */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.01) !important;
+  font-family: 'Outfit', sans-serif;
+  color: #1A1A1A;
+  overflow: hidden;
+}
+
+/* Base Window Container */
+.window-container {
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  background-color: rgba(255, 255, 255, 0.01);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 像素风主对话框 (Pixel Art Card) */
+.pixel-dialog {
+  width: 100%;
+  max-width: 420px;
+  height: 560px;
+  background-color: #F4F4F6;
+  border: 4px solid #1A1A1A;
+  box-shadow: 8px 8px 0px rgba(26, 26, 26, 0.9);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  image-rendering: pixelated;
+  animation: floatIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 对话框头部 (Header) */
+.pixel-header {
+  background-color: #1A1A1A;
+  color: #FFFFFF;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 4px solid #1A1A1A;
+}
+
+.pixel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.mascot-emoji {
+  font-size: 14px;
+}
+
+.pixel-close-btn {
+  background-color: #E74C3C;
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  padding: 4px 8px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px #000000;
+  transition: all 0.1s ease;
+}
+
+.pixel-close-btn:hover {
+  background-color: #C0392B;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.pixel-close-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px #000000;
+}
+
+/* 对话框内容区域 (Body) */
+.pixel-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 吉祥物区域 */
+.mascot-section {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex: 1;
+  min-height: 0;
+}
+
+.pixel-mascot {
+  flex-shrink: 0;
+  animation: bounce 2s infinite ease-in-out;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* 对话框气泡 */
+.dialog-bubble {
+  background-color: transparent;
+  border: none;
+  position: relative;
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: none;
+  
+  /* Flexbox settings to support scrollable chat & sticky footer */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* 气泡小箭头 */
+.dialog-bubble::before {
+  display: none;
+}
+
+.dialog-bubble::after {
+  display: none;
+}
+
+.bubble-text {
+  font-weight: 500;
+}
+
+.shortcut-tags {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pixel-tag {
+  background-color: #E8ECEF;
+  border: 2px solid #1A1A1A;
+  padding: 4px 8px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #1A1A1A;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.15);
+}
+
+.tag-or {
+  font-size: 11px;
+  font-weight: bold;
+  color: #7F8C8D;
+}
+
+/* 捕获区域 */
+.captured-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #7F8C8D;
+  margin-top: 4px;
+}
+
+.status-badge {
+  background-color: #D4EFDF;
+  color: #196F3D;
+  border: 2px solid #1A1A1A;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-block;
+  align-self: flex-start;
+  box-shadow: 3px 3px 0px rgba(0,0,0,0.1);
+}
+
+.pixel-textbox {
+  background-color: #1A1A1A;
+  color: #2ECC71;
+  border: 3px solid #1A1A1A;
+  padding: 12px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-family: 'Courier Prime', monospace;
+  font-size: 13px;
+  box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+/* Custom Scrollbar for pixel text box */
+.pixel-textbox::-webkit-scrollbar {
+  width: 8px;
+}
+
+.pixel-textbox::-webkit-scrollbar-track {
+  background: #2C3E50;
+}
+
+.pixel-textbox::-webkit-scrollbar-thumb {
+  background: #7F8C8D;
+  border: 2px solid #1A1A1A;
+}
+
+.no-data-placeholder {
+  border: 3px dashed #BDC3C7;
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #7F8C8D;
+  background-color: #FCFDFD;
+}
+
+/* 对话框底部 */
+.pixel-footer {
+  background-color: #EAECEE;
+  border-top: 3px solid #1A1A1A;
+  padding: 8px 16px;
+  font-size: 11px;
+  color: #7F8C8D;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Onboarding Loading State */
+.loading-dialog {
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+.pixel-loader {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  color: #1A1A1A;
+  text-align: center;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Bento Grid System */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.bento-box {
+  background-color: #FFFFFF;
+  border: 3px solid #1A1A1A;
+  box-shadow: 4px 4px 0px rgba(26, 26, 26, 0.15);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.intro-box {
+  grid-column: span 2;
+  background-color: #FCF3CF; /* Soft yellow for welcome card */
+}
+
+.pixel-subtitle {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.intro-text {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #5D6D7E;
+}
+
+.model-box {
+  grid-column: span 1;
+  cursor: pointer;
+  background-color: #FAFAFA;
+}
+
+.model-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 6px 6px 0px rgba(26, 26, 26, 0.25);
+}
+
+.active-model {
+  background-color: #EBF5FB;
+  border-color: #2980B9;
+  box-shadow: 4px 4px 0px #2980B9;
+}
+
+.box-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.box-title input[type="radio"] {
+  cursor: pointer;
+}
+
+.pixel-input {
+  width: 100%;
+  border: 2px solid #1A1A1A;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  background-color: #FFFFFF;
+  box-shadow: inset 2px 2px 0px rgba(0, 0, 0, 0.05);
+  outline: none;
+}
+
+.pixel-input:focus {
+  background-color: #FDEDEC;
+}
+
+/* Action Box spanning both columns at the bottom */
+.action-box {
+  grid-column: span 2;
+  background-color: #EAEDED;
+  align-items: center;
+  gap: 10px;
+}
+
+.default-indicator {
+  font-size: 11px;
+  color: #2C3E50;
+}
+
+.pixel-btn {
+  width: 100%;
+  max-width: 280px;
+  background-color: #2ECC71;
+  color: #FFFFFF;
+  border: 3px solid #1A1A1A;
+  box-shadow: 4px 4px 0px #1A1A1A;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  text-align: center;
+}
+
+.pixel-btn:hover {
+  background-color: #27AE60;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #1A1A1A;
+}
+
+.pixel-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0px #1A1A1A;
+}
+
+/* API Key Guide Links styling */
+.box-guide {
+  text-align: right;
+  margin-top: -2px;
+  margin-bottom: 2px;
+}
+
+.guide-link {
+  font-size: 10px;
+  color: #2980B9;
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+  transition: color 0.1s ease;
+}
+
+.guide-link:hover {
+  color: #1B4F72;
+}
+
+/* Loading Mascot Animation & Glow */
+.pixel-mascot.loading {
+  animation: magicPulse 0.8s infinite alternate ease-in-out;
+  filter: drop-shadow(0 0 8px rgba(127, 140, 141, 0.75));
+}
+
+@keyframes magicPulse {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    transform: translateY(-8px) scale(1.06);
+  }
+}
+
+/* Loading Dots */
+.pixel-loading-dots {
+  display: block;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 6px;
+  letter-spacing: 4px;
+  animation: blinkDots 1s infinite alternate steps(3);
+}
+
+@keyframes blinkDots {
+  0% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+/* Error Bubble Styling */
+.dialog-bubble.bubble-error {
+  background-color: #FDEDEC;
+  border-color: #E74C3C;
+  box-shadow: 4px 4px 0px rgba(231, 76, 60, 0.2);
+}
+
+.dialog-bubble.bubble-error::after {
+  border-color: transparent #FDEDEC transparent transparent;
+}
+
+.dialog-bubble.bubble-error::before {
+  border-color: transparent #E74C3C transparent transparent;
+}
+
+.error-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.error-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #C0392B;
+}
+
+.pixel-btn-error {
+  align-self: flex-start;
+  background-color: #FDEDEC;
+  color: #C0392B;
+  border: 2px solid #E74C3C;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px #C0392B;
+  margin-top: 4px;
+  transition: all 0.1s ease;
+}
+
+.pixel-btn-error:hover {
+  background-color: #FADBD8;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #C0392B;
+}
+
+.pixel-btn-error:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px #C0392B;
+}
+
+/* Multi-turn Chat Styles */
+.bubble-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 !important; /* Override default padding */
+  overflow: hidden;
+}
+
+.chat-messages-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background-color: transparent;
+}
+
+/* Custom Scrollbar for Chat Messages */
+.chat-messages-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages-scroll-area::-webkit-scrollbar-track {
+  background: #F4F4F6;
+}
+
+.chat-messages-scroll-area::-webkit-scrollbar-thumb {
+  background: #BDC3C7;
+  border: 1px solid #1A1A1A;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chat-message.user {
+  align-self: flex-end;
+  background-color: #EBF5FB;
+  border: 2px solid #1A1A1A;
+  padding: 6px 10px;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.15);
+}
+
+.chat-message.assistant {
+  align-self: stretch;
+  max-width: 100%;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}
+
+.chat-message.assistant .message-sender {
+  display: none;
+}
+
+.chat-message.error {
+  align-self: stretch;
+  max-width: 100%;
+  background-color: #FDEDEC;
+  border: 2px solid #E74C3C;
+  color: #C0392B;
+  padding: 6px 10px;
+  box-shadow: 2px 2px 0px rgba(231, 76, 60, 0.15);
+}
+
+.chat-message.error .message-sender {
+  color: #C0392B;
+}
+
+.chat-retry-btn {
+  background-color: #FFFFFF;
+  color: #C0392B;
+  border: 2px solid #E74C3C;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 1px 1px 0px #C0392B;
+  margin-left: 8px;
+  transition: all 0.1s ease;
+}
+
+.chat-retry-btn:hover {
+  background-color: #FADBD8;
+  transform: translate(-0.5px, -0.5px);
+  box-shadow: 1.5px 1.5px 0px #C0392B;
+}
+
+.chat-retry-btn:active {
+  transform: translate(0.5px, 0.5px);
+  box-shadow: 0.5px 0.5px 0px #C0392B;
+}
+
+.message-sender {
+  font-weight: 700;
+  font-size: 10px;
+  color: #7F8C8D;
+  margin-bottom: 2px;
+}
+
+.chat-message.user .message-sender {
+  text-align: right;
+  color: #2980B9;
+}
+
+.message-text {
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+
+/* Sticky Input Form at the bottom of the bubble */
+.follow-up-form {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  background-color: transparent;
+  border-top: 2px solid #1A1A1A;
+}
+
+.follow-up-input {
+  flex: 1;
+  border: 2px solid #1A1A1A;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  background-color: #FFFFFF;
+  box-shadow: inset 2px 2px 0px rgba(0, 0, 0, 0.05);
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+/* Focused state style: neon/fluorescent green border & solid shadow & light tint */
+.follow-up-input:focus {
+  border: 2px solid #00FF66;
+  background-color: #F0FFF4;
+  box-shadow: inset 2px 2px 0px rgba(0, 0, 0, 0.05), 3px 3px 0px #00FF66;
+  outline: none;
+}
+
+.follow-up-btn {
+  background-color: #1A1A1A;
+  color: #FFFFFF;
+  border: 2px solid #1A1A1A;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.15);
+  transition: all 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.follow-up-btn:hover {
+  background-color: #333333;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+}
+
+.follow-up-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.1);
+}
+
+.follow-up-btn:disabled {
+  background-color: #BDC3C7;
+  border-color: #BDC3C7;
+  color: #7F8C8D;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Relocated and weakened selected text styles */
+.selected-text-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.selected-text-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #7F8C8D;
+}
+
+.selected-text-box {
+  background-color: #F8F9FA;
+  color: #666666;
+  border: 1px dashed #BDC3C7;
+  padding: 8px 10px;
+  max-height: 70px;
+  overflow-y: auto;
+  font-family: 'Courier Prime', monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.selected-text-box::-webkit-scrollbar {
+  width: 4px;
+}
+
+.selected-text-box::-webkit-scrollbar-thumb {
+  background: #BDC3C7;
+}
+
+/* Return to configuration button in footer */
+.pixel-back-btn {
+  background: transparent;
+  border: none;
+  color: #7F8C8D;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  text-decoration: underline;
+  transition: color 0.1s ease;
+}
+
+.pixel-back-btn:hover {
+  color: #1A1A1A;
+}
+
+/* Gray pill code capsules style for highlighted terms */
+.code-highlight {
+  background-color: #f0f0f0;
+  color: #333333;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid #dcdcdc;
+  font-family: 'Courier Prime', monospace;
+  font-weight: 600;
+  font-size: 12px;
+  display: inline-block;
+  margin: 0 2px;
+}
+
+/* Mode Toggle Switch Styling */
+.mode-toggle-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background-color: #EAECEE;
+  border-bottom: 2px solid #1A1A1A;
+  flex-shrink: 0;
+}
+
+.mode-toggle-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #7F8C8D;
+}
+
+.toggle-switch {
+  display: flex;
+  border: 2px solid #1A1A1A;
+  background-color: #FFFFFF;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: #7F8C8D;
+  transition: all 0.1s ease;
+}
+
+.toggle-btn.active {
+  background-color: #1A1A1A;
+  color: #FFFFFF;
+}
+
+/* Expert Loading Styling */
+.loading-message.expert-loading {
+  border: 3px dashed #E74C3C !important;
+  background-color: #FDEDEC !important;
+  padding: 16px;
+  animation: expertBorderPulse 1s infinite alternate;
+}
+
+@keyframes expertBorderPulse {
+  0% { border-color: #E74C3C; }
+  100% { border-color: #F39C12; }
+}
+
+/* Token Realtime Audit Bar styling */
+.token-audit-bar {
+  font-size: 10px;
+  color: #95a5a6;
+  text-align: right;
+  padding: 4px 12px 2px 12px;
+  background-color: transparent;
+  font-family: 'Courier Prime', monospace;
+  margin-top: -2px;
+}
