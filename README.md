@@ -24,50 +24,27 @@ Code-To-Chinese 是一个专门帮编程新手看懂代码的小工具。你只�
 
 ## 快速上手步骤 (Quick Start)
 
-### 1. 环境准备
-确保您的本地环境已安装 [Node.js](https://nodejs.org/) (v18+) 及包管理器。
+### 1. 下载与安装
+前往 Releases 页面 下载最新的 WutZit_0.1.0_x64-setup.exe 安装包并运行。
 
-### 2. 获取 API Keys
+### 2. 环境初始化 (关键步骤)
+Code-To-Chinese 需要连接到 AI 服务才能工作。以下是获取密钥并将其配置到软件中的完整指南：
+*
+第一步：获取您的 API Key
 WutZit 支持以下三种主流 LLM 模型，请提前准备好至少一个 API Key：
 *   **Gemini** (推荐): 访问 [Google AI Studio](https://aistudio.google.com/app/apikey) 获取。
 *   **DeepSeek**: 访问 [DeepSeek Open Platform](https://platform.deepseek.com/api_keys) 获取。
 *   **OpenAI**: 访问 [OpenAI Platform](https://platform.openai.com/api-keys) 获取。
-
-### 3. 安装与配置
-1.  克隆/复制项目到本地：
-    ```bash
-    cd WutZit1.0
-    ```
-2.  安装依赖：
-    ```bash
-    npm install
-    ```
-3.  配置本地开发环境变量：
-    复制 `.env.example` 并重命名为 `.env`：
-    ```bash
-    cp .env.example .env
-    ```
-    编辑 `.env` 文件，填入您的 API Keys：
-    ```env
-    VITE_GEMINI_KEY=您的GeminiApiKey
-    VITE_DEEPSEEK_KEY=您的DeepSeekApiKey
-    VITE_OPENAI_KEY=您的OpenAIApiKey
-    VITE_DEFAULT_MODEL=gemini
-    ```
-
-### 4. 运行与开发
-*   **Web 预览开发** (支持环境变量读取)：
-    ```bash
-    npm run dev
-    ```
-*   **Tauri 客户端开发** (支持本地安全加密存储配置)：
-    ```bash
-    npm run tauri dev
-    ```
-*   **客户端构建打包**：
-    ```bash
-    npm run build
-    npm run tauri build
-    ```
-
----
+*
+第二部：在 WutZit 中配置密钥
+*   找到安装目录：默认情况下，安装包会安装在 C:\Program Files\WutZit 或您指定的文件夹中。如果找不到，可以在桌面右键点击“WutZit”图标，选择“打开文件所在的位置”。
+*   创建配置文件：在该文件夹内，右键点击空白处->新建->文本文档。将该文件命名为 .env (注意：文件名前面必须有那个点，且要把末尾的 .txt 后缀删掉)。
+*   填入内容：右键点击 .env 文件，选择“用记事本打开”。将以下内容完整复制进去（根据你选择的模型，填入对应的 Key）：
+*     VITE_GEMINI_KEY=在此处粘贴您的Gemini_API_Key
+*     VITE_DEEPSEEK_KEY=在此处粘贴您的DeepSeek_API_Key
+*     VITE_OPENAI_KEY=在此处粘贴您的OpenAI_API_Key
+*     VITE_DEFAULT_MODEL=gemini
+*
+第三步：重启生效
+*   完全关闭 WutZit 软件。
+*   重新启动它。软件会自动读取 `.env` 中的密钥，现在您可以开始使用Code-To-Chinese了 。
