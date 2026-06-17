@@ -36,15 +36,8 @@ WutZit 支持以下三种主流 LLM 模型，请提前准备好至少一个 API 
 *   **DeepSeek**: 访问 [DeepSeek Open Platform](https://platform.deepseek.com/api_keys) 获取。
 *   **OpenAI**: 访问 [OpenAI Platform](https://platform.openai.com/api-keys) 获取。
 *
-第二部：在 Code-To-Chinese 中配置密钥
-*   找到安装目录：如果找不到，可以在桌面右键点击“Code-To-Chinese”图标，选择“打开文件所在的位置”。
-*   创建配置文件：在该文件夹内，右键点击空白处->新建->文本文档。将该文件命名为 .env (注意：文件名前面必须有那个点，且要把末尾的 .txt 后缀删掉)。
-*   填入内容：右键点击 .env 文件，选择“用记事本打开”。将以下内容完整复制进去（根据你选择的模型，填入对应的 Key）：
-*VITE_GEMINI_KEY=在此处粘贴您的Gemini_API_Key
-*VITE_DEEPSEEK_KEY=在此处粘贴您的DeepSeek_API_Key
-*VITE_OPENAI_KEY=在此处粘贴您的OpenAI_API_Key
-*VITE_DEFAULT_MODEL=gemini
-*
-第三步：重启生效
-*   完全关闭 Code-To-Chinese 软件。
-*   重新启动它。软件会自动读取 `.env` 中的密钥，现在您可以开始使用Code-To-Chinese了 。
+第二步：在 Code-To-Chinese 中配置密钥
+*  复制好您对API key后，鼠标不要选中任何文本
+*  空按Alt+Q唤出 Code-To-Chinese，在弹出页面中回到配置API key的页面输入你的API key
+*  
+*  现在您可以开始使用Code-To-Chinese了 
