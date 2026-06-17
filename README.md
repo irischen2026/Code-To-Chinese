@@ -31,7 +31,7 @@ Code-To-Chinese 是一个专门帮编程新手看懂代码的小工具。你只�
 Code-To-Chinese 需要连接到 AI 服务才能工作。以下是获取密钥并将其配置到软件中的完整指南：
 *
 第一步：获取您的 API Key
-WutZit 支持以下三种主流 LLM 模型，请提前准备好至少一个 API Key：
+*Code-To-Chinese目前 支持以下三种主流 LLM 模型，请提前准备好至少一个 API Key：
 *   **Gemini** (推荐): 访问 [Google AI Studio](https://aistudio.google.com/app/apikey) 获取。
 *   **DeepSeek**: 访问 [DeepSeek Open Platform](https://platform.deepseek.com/api_keys) 获取。
 *   **OpenAI**: 访问 [OpenAI Platform](https://platform.openai.com/api-keys) 获取。
@@ -40,4 +40,4 @@ WutZit 支持以下三种主流 LLM 模型，请提前准备好至少一个 API 
 *  复制好您对API key后，鼠标不要选中任何文本
 *  空按Alt+Q唤出 Code-To-Chinese，在弹出页面中回到配置API key的页面输入你的API key
 *  
-*  现在您可以开始使用Code-To-Chinese了 
+现在您可以开始使用Code-To-Chinese了！
