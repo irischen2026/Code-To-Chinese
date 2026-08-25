@@ -87,7 +87,10 @@ function App() {
   const [geminiKey, setGeminiKey] = useState("");
   const [deepseekKey, setDeepseekKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState<"gemini" | "deepseek" | "openai">("gemini");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customKey, setCustomKey] = useState("");
+  const [customModelName, setCustomModelName] = useState("");
+  const [selectedModel, setSelectedModel] = useState<"gemini" | "deepseek" | "openai" | "custom">("gemini");
 
   const handleOpenLink = async (e: React.MouseEvent, url: string) => {
     e.stopPropagation(); // Prevent card selection click bubbling
@@ -110,7 +113,7 @@ function App() {
           loadApiKeys(),
           timeoutPromise
         ]);
-        if (keys && (keys.gemini || keys.deepseek || keys.openai)) {
+        if (keys && (keys.gemini || keys.deepseek || keys.openai || (keys.customBaseUrl && keys.customApiKey && keys.customModel))) {
           setApiKeys(keys);
           setIsOnboarded(true);
           await invoke("set_config_mode", { active: false });
@@ -194,19 +197,34 @@ function App() {
 
   const handleSaveOnboarding = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!geminiKey && !deepseekKey && !openaiKey) {
-      alert("请至少配置一个模型的 API Key 才能激活小天使！");
+    const hasCustomConfig =
+      customBaseUrl.trim().length > 0 &&
+      customKey.trim().length > 0 &&
+      customModelName.trim().length > 0;
+
+    if (!geminiKey && !deepseekKey && !openaiKey && !hasCustomConfig) {
+      alert("请至少配置一个模型的 API Key（或完整的自定义端点）才能激活小天使！");
+      return;
+    }
+    if (selectedModel === "custom" && !hasCustomConfig) {
+      alert("选择自定义模式时，Base URL、API Key、模型名 三项都需要填写！");
       return;
     }
 
     const cleanGemini = geminiKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanDeepseek = deepseekKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanOpenai = openaiKey.trim().replace(/[^\x21-\x7E]/g, "");
+    const cleanCustomBaseUrl = customBaseUrl.trim().replace(/[^\x21-\x7E]/g, "");
+    const cleanCustomKey = customKey.trim().replace(/[^\x21-\x7E]/g, "");
+    const cleanCustomModelName = customModelName.trim().replace(/[^\x21-\x7E]/g, "");
 
     const keys: ApiKeys = {
       gemini: cleanGemini,
       deepseek: cleanDeepseek,
       openai: cleanOpenai,
+      customBaseUrl: hasCustomConfig ? cleanCustomBaseUrl : "",
+      customApiKey: hasCustomConfig ? cleanCustomKey : "",
+      customModel: hasCustomConfig ? cleanCustomModelName : "",
       defaultModel: selectedModel,
     };
 
@@ -456,6 +474,51 @@ function App() {
               />
             </div>
 
+            {/* Bento Box 4b: Custom OpenAI-compatible endpoint */}
+            <div
+              className={`bento-box model-box ${
+                selectedModel === "custom" ? "active-model" : ""
+              }`}
+              onClick={() => setSelectedModel("custom")}
+            >
+              <div className="box-title">
+                <span>🔧 自定义 (OpenAI 兼容)</span>
+                <input
+                  type="radio"
+                  name="default_model"
+                  checked={selectedModel === "custom"}
+                  onChange={() => setSelectedModel("custom")}
+                />
+              </div>
+              <div className="box-guide">
+                <span className="guide-link">Kimi / 硅基流动 / OpenRouter / Ollama 等</span>
+              </div>
+              <input
+                type="text"
+                className="pixel-input"
+                placeholder="Base URL，如 https://api.siliconflow.cn/v1"
+                value={customBaseUrl}
+                onChange={(e) => setCustomBaseUrl(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <input
+                type="password"
+                className="pixel-input"
+                placeholder="API Key，如 sk-..."
+                value={customKey}
+                onChange={(e) => setCustomKey(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <input
+                type="text"
+                className="pixel-input"
+                placeholder="模型名，如 moonshot-v1-8k"
+                value={customModelName}
+                onChange={(e) => setCustomModelName(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+
             {/* Bento Box 5: Save & Activate Button */}
             <div className="bento-box action-box">
               <div className="default-indicator">
@@ -465,7 +528,9 @@ function App() {
                     ? "Gemini"
                     : selectedModel === "deepseek"
                     ? "DeepSeek"
-                    : "OpenAI"}
+                    : selectedModel === "openai"
+                    ? "OpenAI"
+                    : `自定义 (${customModelName || "未填模型名"})`}
                 </strong>
               </div>
               <button type="submit" className="pixel-btn pixel-btn-primary">
@@ -648,7 +713,7 @@ function App() {
             </button>
           </div>
           <div className="footer-right">
-            <span>{statusMsg} | {apiKeys.defaultModel?.toUpperCase()}</span>
+            <span>{statusMsg} | {apiKeys.defaultModel === "custom" ? apiKeys.customModel : apiKeys.defaultModel?.toUpperCase()}</span>
           </div>
         </div>
       </div>

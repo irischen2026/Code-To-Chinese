@@ -18,6 +18,57 @@ export interface ChatMessage {
   content: string;
 }
 
+function buildChatCompletionsUrl(baseUrl: string): string {
+  const base = baseUrl.trim().replace(/\/+$/, "");
+  if (base.endsWith("/chat/completions")) return base;
+  return `${base}/chat/completions`;
+}
+
+async function fetchOpenAICompatible(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  temperature: number,
+  maxTokens: number
+): Promise<ExplanationResult> {
+  const response = await fetch(buildChatCompletionsUrl(baseUrl), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: maxTokens
+    })
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || `自定义模型 API 请求失败: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const resultText = data.choices?.[0]?.message?.content;
+  if (!resultText) throw new Error("自定义模型 API 返回了空内容");
+
+  return {
+    text: resultText,
+    totalTokens: data.usage?.total_tokens
+  };
+}
+
+async function requireCustomConfig(): Promise<{ baseUrl: string; model: string }> {
+  const keys = await loadApiKeys();
+  if (!keys?.customBaseUrl || !keys?.customModel) {
+    throw new Error("自定义模型未配置 Base URL 或模型名，请进入设置配置！");
+  }
+  return { baseUrl: keys.customBaseUrl, model: keys.customModel };
+}
+
 async function getActiveApiKey(activeModel: string): Promise<string> {
   const keys = await loadApiKeys();
   if (!keys) {
@@ -28,6 +79,7 @@ async function getActiveApiKey(activeModel: string): Promise<string> {
   if (activeModel === "gemini") apiKey = keys.gemini || "";
   else if (activeModel === "deepseek") apiKey = keys.deepseek || "";
   else if (activeModel === "openai") apiKey = keys.openai || "";
+  else if (activeModel === "custom") apiKey = keys.customApiKey || "";
 
   apiKey = apiKey.trim().replace(/[^\x21-\x7E]/g, "");
   if (!apiKey) {
@@ -143,6 +195,21 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
     };
   }
 
+  if (activeModel === "custom") {
+    const { baseUrl, model } = await requireCustomConfig();
+    return fetchOpenAICompatible(
+      baseUrl,
+      apiKey,
+      model,
+      [
+        { role: "system", content: prompt },
+        { role: "user", content: text }
+      ],
+      0.5,
+      800
+    );
+  }
+
   throw new Error(`未知的模型类型: ${activeModel}`);
 }
 
@@ -256,6 +323,21 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
     };
   }
 
+  if (activeModel === "custom") {
+    const { baseUrl, model } = await requireCustomConfig();
+    return fetchOpenAICompatible(
+      baseUrl,
+      apiKey,
+      model,
+      [
+        { role: "system", content: prompt },
+        ...history.map((msg) => ({ role: msg.role, content: msg.content }))
+      ],
+      0.5,
+      800
+    );
+  }
+
   throw new Error(`未知的模型类型: ${activeModel}`);
 }
 
@@ -353,6 +435,22 @@ export async function verifyIntent(text: string): Promise<boolean> {
     const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) return false;
     return resultText.trim().toUpperCase().includes("YES");
+  }
+
+  if (activeModel === "custom") {
+    const { baseUrl, model } = await requireCustomConfig();
+    const result = await fetchOpenAICompatible(
+      baseUrl,
+      apiKey,
+      model,
+      [
+        { role: "system", content: gatekeeperSystemPrompt },
+        { role: "user", content: text }
+      ],
+      0.1,
+      5
+    );
+    return result.text.trim().toUpperCase().includes("YES");
   }
 
   throw new Error(`未知的模型类型: ${activeModel}`);
