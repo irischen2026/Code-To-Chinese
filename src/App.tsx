@@ -83,6 +83,36 @@ function App() {
     modeRef.current = mode;
   }, [mode]);
 
+  const runExplanation = async (text: string, currentMode: "general" | "expert") => {
+    setStatusMsg("正在验证意图...");
+    setIsLoading(true);
+    setError(null);
+    setChatHistory([]); // Clear past history for new conversation
+    setLatestTokens(null);
+
+    try {
+      const isTechnical = await verifyIntent(text);
+      if (!isTechnical) {
+        setError("此处内容非技术逻辑，WutZit 拒接受理");
+        setStatusMsg("验证拒绝！");
+        return;
+      }
+
+      setStatusMsg(currentMode === "expert" ? "正在进入专家级审计，运算深度增加..." : "正在思考中...");
+      const result = await fetchExplanation(text, currentMode);
+      setChatHistory([
+        { role: "assistant", content: result.text }
+      ]);
+      setLatestTokens(result.totalTokens || null);
+      setStatusMsg("解码完毕！");
+    } catch (err: any) {
+      setError(err?.message || "网络请求失败，请检查配置与网络连接。");
+      setStatusMsg("解码失败！");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Temporary state for the Onboarding form
   const [geminiKey, setGeminiKey] = useState("");
   const [deepseekKey, setDeepseekKey] = useState("");
@@ -132,34 +162,8 @@ function App() {
 
     // 2. Listen to selection captured event
     const unlistenPromise = listen<string>("selection-captured", async (event) => {
-      const text = event.payload;
-      setCapturedText(text);
-      setStatusMsg("正在验证意图...");
-      setIsLoading(true);
-      setError(null);
-      setChatHistory([]); // Clear past history for new conversation
-      
-      try {
-        const isTechnical = await verifyIntent(text);
-        if (!isTechnical) {
-          setError("此处内容非技术逻辑，WutZit 拒接受理");
-          setStatusMsg("验证拒绝！");
-          return;
-        }
-
-        setStatusMsg(modeRef.current === "expert" ? "正在进入专家级审计，运算深度增加..." : "正在思考中...");
-        const result = await fetchExplanation(text, modeRef.current);
-        setChatHistory([
-          { role: "assistant", content: result.text }
-        ]);
-        setLatestTokens(result.totalTokens || null);
-        setStatusMsg("解码完毕！");
-      } catch (err: any) {
-        setError(err?.message || "网络请求失败，请检查配置与网络连接。");
-        setStatusMsg("解码失败！");
-      } finally {
-        setIsLoading(false);
-      }
+      setCapturedText(event.payload);
+      runExplanation(event.payload, modeRef.current);
     });
 
     return () => {
@@ -231,8 +235,13 @@ function App() {
     try {
       await saveApiKeys(keys);
       setApiKeys(keys);
+      setError(null);
       setIsOnboarded(true);
       await invoke("set_config_mode", { active: false });
+      // Auto-retry the text captured before first-time activation
+      if (capturedText.trim().length > 0) {
+        runExplanation(capturedText, mode);
+      }
     } catch (err) {
       alert("保存设置失败，请稍后重试！");
       console.error(err);
@@ -300,32 +309,9 @@ function App() {
     setMode(newMode);
     setChatHistory([]);
     setLatestTokens(null);
-    
-    if (capturedText) {
-      setStatusMsg("正在验证意图...");
-      setIsLoading(true);
-      setError(null);
-      try {
-        const isTechnical = await verifyIntent(capturedText);
-        if (!isTechnical) {
-          setError("此处内容非技术逻辑，WutZit 拒接受理");
-          setStatusMsg("验证拒绝！");
-          return;
-        }
 
-        setStatusMsg(newMode === "expert" ? "正在进入专家级审计，运算深度增加..." : "正在思考中...");
-        const result = await fetchExplanation(capturedText, newMode);
-        setChatHistory([
-          { role: "assistant", content: result.text }
-        ]);
-        setLatestTokens(result.totalTokens || null);
-        setStatusMsg("解码完毕！");
-      } catch (err: any) {
-        setError(err?.message || "网络请求失败，请检查配置与网络连接。");
-        setStatusMsg("解码失败！");
-      } finally {
-        setIsLoading(false);
-      }
+    if (capturedText) {
+      runExplanation(capturedText, newMode);
     }
   };
 
