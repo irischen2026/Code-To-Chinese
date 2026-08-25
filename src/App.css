@@ -29,6 +29,12 @@ body,
   align-items: center;
 }
 
+/* Draggable strip at the top of the active (floating) view */
+.drag-strip {
+  height: 20px;
+  flex-shrink: 0;
+}
+
 /* 像素风主对话框 (Pixel Art Card) */
 .pixel-dialog {
   width: 100%;

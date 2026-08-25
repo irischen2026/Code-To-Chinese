@@ -483,7 +483,12 @@ function App() {
     <div className="window-container">
       <div className="pixel-dialog" data-tauri-drag-region>
         {/* Hided .pixel-header in active mode to make it a pure floating card */}
-        
+
+        {/* Slim always-on-top drag handle: data-tauri-drag-region only fires
+            when the attributed element itself is the click target, and child
+            widgets otherwise swallow every hit. */}
+        <div className="drag-strip" data-tauri-drag-region />
+
         <div className="pixel-body" data-tauri-drag-region>
           {capturedText && (
             <div className="selected-text-container">
