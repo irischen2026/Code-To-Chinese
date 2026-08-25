@@ -343,7 +343,8 @@ function App() {
             </button>
           </div>
 
-          <form onSubmit={handleSaveOnboarding} className="pixel-body bento-grid">
+          <form onSubmit={handleSaveOnboarding} className="pixel-body">
+            <div className="bento-grid">
             {/* Bento Box 1: Welcome & Intro (Spans 2 columns) */}
             <div className="bento-box intro-box">
               <h2 className="pixel-subtitle">欢迎！激活我的魔法能力 🌟</h2>
@@ -504,8 +505,9 @@ function App() {
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
+            </div>
 
-            {/* Bento Box 5: Save & Activate Button */}
+            {/* Action bar pinned below the scrollable grid */}
             <div className="bento-box action-box">
               <div className="default-indicator">
                 当前激活默认模型:{" "}
