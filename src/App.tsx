@@ -145,6 +145,15 @@ function App() {
         ]);
         if (keys && (keys.gemini || keys.deepseek || keys.openai || (keys.customBaseUrl && keys.customApiKey && keys.customModel))) {
           setApiKeys(keys);
+          // Reflect the persisted configuration so re-saving doesn't wipe
+          // other providers' keys and the correct provider stays selected.
+          setSelectedModel(keys.defaultModel || "gemini");
+          setGeminiKey(keys.gemini || "");
+          setDeepseekKey(keys.deepseek || "");
+          setOpenaiKey(keys.openai || "");
+          setCustomBaseUrl(keys.customBaseUrl || "");
+          setCustomKey(keys.customApiKey || "");
+          setCustomModelName(keys.customModel || "");
           setIsOnboarded(true);
           await invoke("set_config_mode", { active: false });
         } else {
