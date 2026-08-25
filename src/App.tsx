@@ -77,11 +77,18 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"general" | "expert">("general");
   const modeRef = useRef<"general" | "expert">("general");
+  const isOnboardedRef = useRef<boolean>(false);
   const [latestTokens, setLatestTokens] = useState<number | null>(null);
 
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  useEffect(() => {
+    if (isOnboarded !== null) {
+      isOnboardedRef.current = isOnboarded;
+    }
+  }, [isOnboarded]);
 
   const runExplanation = async (text: string, currentMode: "general" | "expert") => {
     setStatusMsg("正在验证意图...");
@@ -172,6 +179,11 @@ function App() {
     // 2. Listen to selection captured event
     const unlistenPromise = listen<string>("selection-captured", async (event) => {
       setCapturedText(event.payload);
+      // Before activation there is no provider to query: just keep the
+      // captured text — the post-activation retry sends it once settings
+      // are saved, instead of surfacing a guaranteed "no API key" error
+      // on every first run.
+      if (!isOnboardedRef.current) return;
       runExplanation(event.payload, modeRef.current);
     });
 
