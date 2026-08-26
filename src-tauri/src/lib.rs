@@ -50,6 +50,17 @@ pub fn run() {
                             // 1. Read old clipboard content
                             let old_text = app.clipboard().read_text().unwrap_or_default();
 
+                            // 1b. Plant a clipboard sentinel (macOS): plain
+                            // change-detection false-fails when the user
+                            // re-selects text identical to what the clipboard
+                            // already holds.
+                            #[cfg(target_os = "macos")]
+                            let _ = app.clipboard().write_text("__CODE2CHINESE_SENTINEL__");
+                            #[cfg(target_os = "macos")]
+                            let needle: String = "__CODE2CHINESE_SENTINEL__".to_string();
+                            #[cfg(not(target_os = "macos"))]
+                            let needle: String = old_text.clone();
+
                             // 2. Fast path: CGEvent with explicit Command flags —
                             // immune to physically-held modifiers (e.g. Option
                             // from Alt+Q). Non-macOS keeps the direct call.
@@ -80,7 +91,7 @@ pub fn run() {
                                 }
                                 std::thread::sleep(poll_interval);
                                 if let Ok(current_text) = app.clipboard().read_text() {
-                                    if current_text != old_text {
+                                    if !current_text.is_empty() && current_text != needle {
                                         text = current_text;
                                         break;
                                     }
@@ -93,6 +104,13 @@ pub fn run() {
                                         Err(e) => Some(e),
                                     };
                                 }
+                            }
+
+                            // Restore the pre-shortcut clipboard when nothing
+                            // was captured in time.
+                            #[cfg(target_os = "macos")]
+                            if text == "__CODE2CHINESE_SENTINEL__" {
+                                text = old_text.clone();
                             }
 
                             // 4. Get cursor position
