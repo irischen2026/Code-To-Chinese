@@ -31,8 +31,23 @@ body,
 
 /* Draggable strip at the top of the active (floating) view */
 .drag-strip {
-  height: 20px;
+  height: 22px;
   flex-shrink: 0;
+  background-color: #F4F4F6;
+  background-image: radial-gradient(circle, #BDC3C7 1.5px, transparent 1.5px);
+  background-size: 12px 6px;
+  background-position: center;
+  background-repeat: repeat-x;
+}
+
+/* Shown when the simulated copy failed to update the clipboard */
+.capture-warning {
+  border: 2px dashed #E74C3C;
+  background-color: #FDEDEC;
+  color: #C0392B;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 8px 10px;
 }
 
 /* 像素风主对话框 (Pixel Art Card) */

@@ -77,6 +77,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"general" | "expert">("general");
   const modeRef = useRef<"general" | "expert">("general");
+  const [captureOk, setCaptureOk] = useState<boolean | null>(null);
   const [latestTokens, setLatestTokens] = useState<number | null>(null);
 
   useEffect(() => {
@@ -159,8 +160,15 @@ function App() {
       }
     });
 
+    // Listen to the capture result: false means the simulated copy did not
+    // update the clipboard (typically missing Accessibility permission).
+    const unlistenStatusPromise = listen<boolean>("capture-status", (event) => {
+      setCaptureOk(event.payload);
+    });
+
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
+      unlistenStatusPromise.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -496,6 +504,13 @@ function App() {
               <div className="selected-text-box">
                 <code>{capturedText}</code>
               </div>
+            </div>
+          )}
+
+          {capturedText && captureOk === false && (
+            <div className="capture-warning">
+              ⚠️ 未能自动捕获新选区（上方为剪贴板旧内容）。请到 系统设置 → 隐私与安全性 → 辅助功能，
+              将 CodeToChinese 的开关关闭再打开，然后重试。
             </div>
           )}
 

@@ -107,7 +107,9 @@ pub fn run() {
                                     let _ = window.show();
                                     let _ = window.set_focus();
 
-                                    // 7. Emit text to frontend
+                                    // 7. Emit text to frontend, plus whether the
+                                    // simulated copy actually updated the clipboard
+                                    let _ = window.emit("capture-status", text != old_text);
                                     let _ = window.emit("selection-captured", text);
                                 }
                             }
