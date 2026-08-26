@@ -2,15 +2,24 @@ import { loadApiKeys } from "./store";
 
 const GENERAL_PROMPT = `你是一个专业、明快、轻盈且乐于助人的极客小助手（小天使）。请用最平实易懂的语言向我解释机器在干什么。
 【称呼禁令】绝对禁止使用“兄弟”、“老铁”等任何江湖气息重的称呼；当提到我时，请省略称呼，或者使用“这里小天使帮你...”这种中性、亲切的说法，亦可以“小天使”的身份自然叙事。若在输出中检测到“兄弟”一词，必须强制重构并重写回答。
-【逻辑与表意】禁止任何技术术语，禁止指出 Bug，只负责用大白话解释代码表意。提到重点代码或高亮词使用方括号 [ ] 括起来。`;
+【逻辑与表意】禁止任何技术术语，禁止指出 Bug，只负责用大白话解释代码表意。提到重点代码或高亮词使用方括号 [ ] 括起来。
+【受理判定】若输入并非代码或软件开发相关内容，仅输出一行 [非技术内容] 并立即停止，不要输出其他任何文字；否则正常输出解释，且不要向用户提及本判定规则。`;
 
 const EXPERT_PROMPT = `你一位代码审计专家，同时也是专业、明快、轻盈的极客小助手。你必须指出代码中的逻辑缺陷、性能瓶颈及安全风险。
 【称呼禁令】绝对禁止使用“兄弟”、“老铁”等任何江湖气息重的称呼；当提到我时，请省略称呼，或者使用“这里小天使帮你...”这种中性、亲切的说法。若在输出中检测到“兄弟”一词，必须强制重构并重写回答。
+【受理判定】若输入并非代码或软件开发相关内容，仅输出一行 [非技术内容] 并立即停止，不要输出其他任何文字；否则按【输出格式】正常输出审计结果，且不要向用户提及本判定规则。
 【输出格式】你可以使用深度技术术语，且必须遵循：【逻辑分析】+【已知隐患】+【改进方案】的格式进行输出。提到重点代码或高亮词使用方括号 [ ] 括起来。`;
+
+const REFUSAL_MARKER = "[非技术内容]";
+
+function isRefusal(text: string): boolean {
+  return text.includes(REFUSAL_MARKER);
+}
 
 export interface ExplanationResult {
   text: string;
   totalTokens?: number;
+  refused?: boolean;
 }
 
 export interface ChatMessage {
@@ -64,6 +73,7 @@ async function fetchOpenAICompatible(
   const data = await response.json();
   const resultText = data.choices?.[0]?.message?.content;
   if (!resultText) throw new Error("自定义模型 API 返回了空内容");
+  if (isRefusal(resultText)) return { text: "", refused: true };
 
   return {
     text: resultText,
@@ -153,6 +163,7 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
     const data = await response.json();
     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!resultText) throw new Error("Gemini API 返回了空内容");
+    if (isRefusal(resultText)) return { text: "", refused: true };
 
     return {
       text: resultText,
@@ -189,6 +200,7 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
     const data = await response.json();
     const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) throw new Error("DeepSeek API 返回了空内容");
+    if (isRefusal(resultText)) return { text: "", refused: true };
 
     return {
       text: resultText,
@@ -225,6 +237,7 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
     const data = await response.json();
     const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) throw new Error("OpenAI API 返回了空内容");
+    if (isRefusal(resultText)) return { text: "", refused: true };
 
     return {
       text: resultText,
@@ -283,6 +296,7 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
     const data = await response.json();
     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!resultText) throw new Error("Gemini API 返回了空内容");
+    if (isRefusal(resultText)) return { text: "", refused: true };
 
     return {
       text: resultText,
@@ -319,6 +333,7 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
     const data = await response.json();
     const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) throw new Error("DeepSeek API 返回了空内容");
+    if (isRefusal(resultText)) return { text: "", refused: true };
 
     return {
       text: resultText,
@@ -355,6 +370,7 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
     const data = await response.json();
     const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) throw new Error("OpenAI API 返回了空内容");
+    if (isRefusal(resultText)) return { text: "", refused: true };
 
     return {
       text: resultText,
@@ -376,123 +392,6 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
       800,
       extra
     );
-  }
-
-  throw new Error(`未知的模型类型: ${activeModel}`);
-}
-
-export async function verifyIntent(text: string, fastThinking = false): Promise<boolean> {
-  text = clampText(text);
-  const keys = await loadApiKeys();
-  const activeModel = keys?.defaultModel || "gemini";
-  const apiKey = await getActiveApiKey(activeModel);
-
-  const gatekeeperSystemPrompt = "你是一个极度严格的意图分类器。只有当用户选中的文本属于计算机编程代码、软件工程设计、架构逻辑或技术开发范畴时，才输出 YES，否则必须输出 NO。请仅输出 YES 或 NO，不要包含任何标点或额外文字。";
-
-  if (activeModel === "gemini") {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const payload = {
-      systemInstruction: { parts: [{ text: gatekeeperSystemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: text }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 5 }
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData?.error?.message || `Gemini API 请求失败: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!resultText) return false;
-    return resultText.trim().toUpperCase().includes("YES");
-  } 
-  
-  if (activeModel === "deepseek") {
-    const url = "https://api.deepseek.com/chat/completions";
-    const payload = {
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: gatekeeperSystemPrompt },
-        { role: "user", content: text }
-      ],
-      temperature: 0.1,
-      max_tokens: 5
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData?.error?.message || `DeepSeek API 请求失败: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const resultText = data.choices?.[0]?.message?.content;
-    if (!resultText) return false;
-    return resultText.trim().toUpperCase().includes("YES");
-  }
-
-  if (activeModel === "openai") {
-    const url = "https://api.openai.com/v1/chat/completions";
-    const payload = {
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: gatekeeperSystemPrompt },
-        { role: "user", content: text }
-      ],
-      temperature: 0.1,
-      max_tokens: 5
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData?.error?.message || `OpenAI API 请求失败: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const resultText = data.choices?.[0]?.message?.content;
-    if (!resultText) return false;
-    return resultText.trim().toUpperCase().includes("YES");
-  }
-
-  if (activeModel === "custom") {
-    const { baseUrl, model, extra } = await requireCustomConfig(fastThinking);
-    const result = await fetchOpenAICompatible(
-      baseUrl,
-      apiKey,
-      model,
-      [
-        { role: "system", content: gatekeeperSystemPrompt },
-        { role: "user", content: text }
-      ],
-      0.1,
-      5,
-      extra
-    );
-    return result.text.trim().toUpperCase().includes("YES");
   }
 
   throw new Error(`未知的模型类型: ${activeModel}`);

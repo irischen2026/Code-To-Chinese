@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { loadApiKeys, saveApiKeys, ApiKeys } from "./store";
-import { fetchExplanation, fetchChatExplanation, ChatMessage, verifyIntent } from "./aiService";
+import { fetchExplanation, fetchChatExplanation, ChatMessage } from "./aiService";
 import "./App.css";
 
 // 全局 JS 错误诊断横幅 (仅在 JS 崩溃时动态创建显示，正常情况下不占用 DOM)
@@ -93,8 +93,7 @@ function App() {
 
   const runExplanation = async (text: string, currentMode: "general" | "expert") => {
     const t0 = Date.now();
-    const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
-    setStatusMsg("正在验证意图...");
+    setStatusMsg(currentMode === "expert" ? "专家审计中..." : "正在思考中...");
     setIsLoading(true);
     setError(null);
     setRefused(false);
@@ -102,26 +101,20 @@ function App() {
     setLatestTokens(null);
 
     try {
-      const isTechnical = await verifyIntent(text);
-      if (!isTechnical) {
-        // Not an API failure: show a friendly note instead of the
-        // scary error card with its "modify API key" button.
+      const result = await fetchExplanation(text, currentMode);
+      if (result.refused) {
+        // The model flagged the selection as non-technical in the same
+        // request — show a friendly note instead of an explanation.
         setRefused(true);
         setStatusMsg("非技术内容");
         return;
       }
 
-      setStatusMsg(
-        currentMode === "expert"
-          ? `意图确认(${elapsed()})，正在进入专家级审计...`
-          : `意图确认(${elapsed()})，正在思考中...`
-      );
-      const result = await fetchExplanation(text, currentMode);
       setChatHistory([
         { role: "assistant", content: result.text }
       ]);
       setLatestTokens(result.totalTokens || null);
-      setStatusMsg(`解码完毕！意图+回答共 ${elapsed()}`);
+      setStatusMsg(`解码完毕！耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     } catch (err: any) {
       setError(err?.message || "网络请求失败，请检查配置与网络连接。");
       setStatusMsg("解码失败！");
