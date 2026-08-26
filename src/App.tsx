@@ -92,6 +92,8 @@ function App() {
   }, [isOnboarded]);
 
   const runExplanation = async (text: string, currentMode: "general" | "expert") => {
+    const t0 = Date.now();
+    const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
     setStatusMsg("正在验证意图...");
     setIsLoading(true);
     setError(null);
@@ -109,13 +111,17 @@ function App() {
         return;
       }
 
-      setStatusMsg(currentMode === "expert" ? "正在进入专家级审计，运算深度增加..." : "正在思考中...");
+      setStatusMsg(
+        currentMode === "expert"
+          ? `意图确认(${elapsed()})，正在进入专家级审计...`
+          : `意图确认(${elapsed()})，正在思考中...`
+      );
       const result = await fetchExplanation(text, currentMode);
       setChatHistory([
         { role: "assistant", content: result.text }
       ]);
       setLatestTokens(result.totalTokens || null);
-      setStatusMsg("解码完毕！");
+      setStatusMsg(`解码完毕！意图+回答共 ${elapsed()}`);
     } catch (err: any) {
       setError(err?.message || "网络请求失败，请检查配置与网络连接。");
       setStatusMsg("解码失败！");
