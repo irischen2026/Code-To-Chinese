@@ -13,11 +13,7 @@ export interface ApiKeys {
   gemini?: string;
   deepseek?: string;
   openai?: string;
-  customBaseUrl?: string;
-  customApiKey?: string;
-  customModel?: string;
-  customExtraJson?: string;
-  defaultModel?: "gemini" | "deepseek" | "openai" | "custom";
+  defaultModel?: "gemini" | "deepseek" | "openai";
 }
 
 export async function saveApiKeys(keys: ApiKeys): Promise<void> {
@@ -39,25 +35,15 @@ export async function loadApiKeys(): Promise<ApiKeys | null> {
   const envDeepseek = import.meta.env.VITE_DEEPSEEK_KEY || "";
   const envOpenai = import.meta.env.VITE_OPENAI_KEY || "";
   const envDefaultModel = import.meta.env.VITE_DEFAULT_MODEL || "gemini";
-  const envCustomBaseUrl = import.meta.env.VITE_CUSTOM_BASE_URL || "";
-  const envCustomApiKey = import.meta.env.VITE_CUSTOM_API_KEY || "";
-  const envCustomModel = import.meta.env.VITE_CUSTOM_MODEL || "";
 
   const mergedKeys: ApiKeys = {
     gemini: keys?.gemini || envGemini,
     deepseek: keys?.deepseek || envDeepseek,
     openai: keys?.openai || envOpenai,
-    customBaseUrl: keys?.customBaseUrl || envCustomBaseUrl,
-    customApiKey: keys?.customApiKey || envCustomApiKey,
-    customModel: keys?.customModel || envCustomModel,
-    customExtraJson: keys?.customExtraJson || "",
-    defaultModel: keys?.defaultModel || (envDefaultModel as ApiKeys["defaultModel"]),
+    defaultModel: keys?.defaultModel || (envDefaultModel as "gemini" | "deepseek" | "openai"),
   };
 
-  const hasCustomConfig =
-    !!mergedKeys.customBaseUrl && !!mergedKeys.customApiKey && !!mergedKeys.customModel;
-
-  if (mergedKeys.gemini || mergedKeys.deepseek || mergedKeys.openai || hasCustomConfig) {
+  if (mergedKeys.gemini || mergedKeys.deepseek || mergedKeys.openai) {
     return mergedKeys;
   }
 

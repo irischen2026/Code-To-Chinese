@@ -18,93 +18,6 @@ export interface ChatMessage {
   content: string;
 }
 
-function buildChatCompletionsUrl(baseUrl: string): string {
-  const base = baseUrl.trim().replace(/\/+$/, "");
-  if (base.endsWith("/chat/completions")) return base;
-  return `${base}/chat/completions`;
-}
-
-async function fetchOpenAICompatible(
-  baseUrl: string,
-  apiKey: string,
-  model: string,
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
-  temperature: number,
-  maxTokens: number,
-  extra: Record<string, unknown> | null = null
-): Promise<ExplanationResult> {
-  const response = await fetch(buildChatCompletionsUrl(baseUrl), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-      ...(extra || {})
-    })
-  });
-
-  if (!response.ok) {
-    const raw = await response.text().catch(() => "");
-    let detail = "";
-    try {
-      detail = JSON.parse(raw)?.error?.message || "";
-    } catch {
-      detail = raw.slice(0, 200);
-    }
-    throw new Error(
-      `自定义模型 API 请求失败 (${response.status})${detail ? `: ${detail}` : ""}`
-    );
-  }
-
-  const data = await response.json();
-  const resultText = data.choices?.[0]?.message?.content;
-  if (!resultText) throw new Error("自定义模型 API 返回了空内容");
-
-  return {
-    text: resultText,
-    totalTokens: data.usage?.total_tokens
-  };
-}
-
-// In general mode the user wants fast answers, so any thinking-disabling
-// extras configured for the custom provider are applied; expert mode keeps
-// the model's full default capability.
-async function requireCustomConfig(fastThinking: boolean): Promise<{
-  baseUrl: string;
-  model: string;
-  extra: Record<string, unknown> | null;
-}> {
-  const keys = await loadApiKeys();
-  if (!keys?.customBaseUrl || !keys?.customModel) {
-    throw new Error("自定义模型未配置 Base URL 或模型名，请进入设置配置！");
-  }
-
-  let extra: Record<string, unknown> | null = null;
-  const raw = (keys.customExtraJson || "").trim();
-  if (fastThinking && raw) {
-    try {
-      extra = JSON.parse(raw);
-    } catch {
-      throw new Error("附加参数不是合法 JSON，请进入设置修正！");
-    }
-  }
-  return { baseUrl: keys.customBaseUrl, model: keys.customModel, extra };
-}
-
-// Guard against context-length 400s on small-context models: cap the
-// captured text before it enters any prompt.
-const MAX_CAPTURE_CHARS = 6000;
-
-function clampText(text: string): string {
-  if (text.length <= MAX_CAPTURE_CHARS) return text;
-  return text.slice(0, MAX_CAPTURE_CHARS) + "\n…（选区过长，已截断）";
-}
-
 async function getActiveApiKey(activeModel: string): Promise<string> {
   const keys = await loadApiKeys();
   if (!keys) {
@@ -115,7 +28,6 @@ async function getActiveApiKey(activeModel: string): Promise<string> {
   if (activeModel === "gemini") apiKey = keys.gemini || "";
   else if (activeModel === "deepseek") apiKey = keys.deepseek || "";
   else if (activeModel === "openai") apiKey = keys.openai || "";
-  else if (activeModel === "custom") apiKey = keys.customApiKey || "";
 
   apiKey = apiKey.trim().replace(/[^\x21-\x7E]/g, "");
   if (!apiKey) {
@@ -125,7 +37,6 @@ async function getActiveApiKey(activeModel: string): Promise<string> {
 }
 
 export async function fetchExplanation(text: string, mode: "general" | "expert" = "general"): Promise<ExplanationResult> {
-  text = clampText(text);
   const prompt = mode === "expert" ? EXPERT_PROMPT : GENERAL_PROMPT;
   const keys = await loadApiKeys();
   const activeModel = keys?.defaultModel || "gemini";
@@ -232,27 +143,10 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
     };
   }
 
-  if (activeModel === "custom") {
-    const { baseUrl, model, extra } = await requireCustomConfig(mode === "general");
-    return fetchOpenAICompatible(
-      baseUrl,
-      apiKey,
-      model,
-      [
-        { role: "system", content: prompt },
-        { role: "user", content: text }
-      ],
-      0.5,
-      800,
-      extra
-    );
-  }
-
   throw new Error(`未知的模型类型: ${activeModel}`);
 }
 
 export async function fetchChatExplanation(history: ChatMessage[], mode: "general" | "expert" = "general"): Promise<ExplanationResult> {
-  history = history.map((msg) => ({ ...msg, content: clampText(msg.content) }));
   const prompt = mode === "expert" ? EXPERT_PROMPT : GENERAL_PROMPT;
   const keys = await loadApiKeys();
   const activeModel = keys?.defaultModel || "gemini";
@@ -362,27 +256,10 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
     };
   }
 
-  if (activeModel === "custom") {
-    const { baseUrl, model, extra } = await requireCustomConfig(mode === "general");
-    return fetchOpenAICompatible(
-      baseUrl,
-      apiKey,
-      model,
-      [
-        { role: "system", content: prompt },
-        ...history.map((msg) => ({ role: msg.role, content: msg.content }))
-      ],
-      0.5,
-      800,
-      extra
-    );
-  }
-
   throw new Error(`未知的模型类型: ${activeModel}`);
 }
 
-export async function verifyIntent(text: string, fastThinking = false): Promise<boolean> {
-  text = clampText(text);
+export async function verifyIntent(text: string): Promise<boolean> {
   const keys = await loadApiKeys();
   const activeModel = keys?.defaultModel || "gemini";
   const apiKey = await getActiveApiKey(activeModel);
@@ -476,23 +353,6 @@ export async function verifyIntent(text: string, fastThinking = false): Promise<
     const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) return false;
     return resultText.trim().toUpperCase().includes("YES");
-  }
-
-  if (activeModel === "custom") {
-    const { baseUrl, model, extra } = await requireCustomConfig(fastThinking);
-    const result = await fetchOpenAICompatible(
-      baseUrl,
-      apiKey,
-      model,
-      [
-        { role: "system", content: gatekeeperSystemPrompt },
-        { role: "user", content: text }
-      ],
-      0.1,
-      5,
-      extra
-    );
-    return result.text.trim().toUpperCase().includes("YES");
   }
 
   throw new Error(`未知的模型类型: ${activeModel}`);
