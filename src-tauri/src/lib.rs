@@ -50,31 +50,48 @@ pub fn run() {
                             // 1. Read old clipboard content
                             let old_text = app.clipboard().read_text().unwrap_or_default();
 
-                            // 2. Simulate Copy — on macOS the osascript stderr
-                            // is captured so failures surface in the UI
-                            // instead of silently using stale content.
+                            // 2. Fast path: CGEvent with explicit Command flags —
+                            // immune to physically-held modifiers (e.g. Option
+                            // from Alt+Q). Non-macOS keeps the direct call.
                             #[cfg(target_os = "macos")]
-                            let copy_detail: Option<String> = match keyboard::simulate_copy() {
-                                Ok(()) => None,
-                                Err(e) => Some(e),
-                            };
+                            keyboard::simulate_copy_fast();
+                            #[cfg(not(target_os = "macos"))]
+                            let _ = keyboard::simulate_copy();
+
+                            #[cfg(target_os = "macos")]
+                            let mut copy_detail: Option<String> = None;
                             #[cfg(not(target_os = "macos"))]
                             let copy_detail: Option<String> = None;
+                            #[cfg(target_os = "macos")]
+                            let mut fallback_fired = false;
 
-                            // 3. Poll for clipboard update (up to 900ms to cover
-                            // osascript cold starts; 30ms polling interval)
+                            // 3. Poll for clipboard update: the fast path gets
+                            // 350ms, then the osascript fallback fires once and
+                            // polling continues up to 900ms total (30ms steps).
                             let mut text = old_text.clone();
                             let start_time = std::time::Instant::now();
-                            let timeout = std::time::Duration::from_millis(900);
                             let poll_interval = std::time::Duration::from_millis(30);
+                            let fast_deadline = std::time::Duration::from_millis(350);
+                            let timeout = std::time::Duration::from_millis(900);
 
-                            while start_time.elapsed() < timeout {
+                            loop {
+                                if start_time.elapsed() >= timeout {
+                                    break;
+                                }
                                 std::thread::sleep(poll_interval);
                                 if let Ok(current_text) = app.clipboard().read_text() {
                                     if current_text != old_text {
                                         text = current_text;
                                         break;
                                     }
+                                }
+                                #[cfg(target_os = "macos")]
+                                if start_time.elapsed() >= fast_deadline && !fallback_fired {
+                                    fallback_fired = true;
+                                    copy_detail = match keyboard::simulate_copy() {
+                                        Ok(()) => None,
+                                        Err(e) => Some(e),
+                                    };
                                 }
                             }
 

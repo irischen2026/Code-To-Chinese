@@ -94,6 +94,55 @@ pub fn simulate_copy() {
 }
 
 #[cfg(target_os = "macos")]
+pub fn simulate_copy_fast() {
+    use std::os::raw::c_void;
+
+    // CoreGraphics system framework, no external crate required.
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventCreateKeyboardEvent(
+            source: *mut c_void,
+            virtual_key: u16,
+            key_down: bool,
+        ) -> *mut c_void;
+        fn CGEventSetFlags(event: *mut c_void, flags: u64);
+        fn CGEventPost(tap: u32, event: *mut c_void);
+        fn CFRelease(cf: *mut c_void);
+    }
+
+    const K_CG_HID_EVENT_TAP: u32 = 0;
+    const K_CG_EVENT_FLAG_MASK_COMMAND: u64 = 1 << 20; // kCGEventFlagMaskCommand
+    const K_VK_ANSI_C: u16 = 8; // kVK_ANSI_C
+
+    unsafe {
+        let key_down = CGEventCreateKeyboardEvent(std::ptr::null_mut(), K_VK_ANSI_C, true);
+        let key_up = CGEventCreateKeyboardEvent(std::ptr::null_mut(), K_VK_ANSI_C, false);
+
+        if key_down.is_null() || key_up.is_null() {
+            if !key_down.is_null() {
+                CFRelease(key_down);
+            }
+            if !key_up.is_null() {
+                CFRelease(key_up);
+            }
+            eprintln!("Failed to create CGEvent for copy simulation.");
+            return;
+        }
+
+        // Explicitly set only the Command flag so physically-held shortcut
+        // modifiers (e.g. Option from Alt+Q) won't turn ⌘C into ⌥⌘C.
+        CGEventSetFlags(key_down, K_CG_EVENT_FLAG_MASK_COMMAND);
+        CGEventSetFlags(key_up, K_CG_EVENT_FLAG_MASK_COMMAND);
+
+        CGEventPost(K_CG_HID_EVENT_TAP, key_down);
+        CGEventPost(K_CG_HID_EVENT_TAP, key_up);
+
+        CFRelease(key_down);
+        CFRelease(key_up);
+    }
+}
+
+#[cfg(target_os = "macos")]
 pub fn simulate_copy() -> Result<(), String> {
     // System Events keystroke: same Accessibility gate as CGEvent posting,
     // but failures return a real error message instead of dropping events
