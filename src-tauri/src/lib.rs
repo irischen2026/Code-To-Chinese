@@ -15,6 +15,11 @@ fn set_config_mode(state: tauri::State<'_, AppState>, active: bool) {
     state.is_config_mode.store(active, std::sync::atomic::Ordering::Relaxed);
 }
 
+#[tauri::command]
+fn begin_window_drag(window: tauri::WebviewWindow) {
+    let _ = window.start_dragging();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -202,7 +207,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![set_config_mode])
+        .invoke_handler(tauri::generate_handler![set_config_mode, begin_window_drag])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
