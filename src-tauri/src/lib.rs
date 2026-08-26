@@ -33,8 +33,9 @@ pub fn run() {
                             // 1. Read old clipboard content
                             let old_text = app.clipboard().read_text().unwrap_or_default();
 
-                            // 2. Simulate Copy
-                            keyboard::simulate_copy();
+                            // 2. Simulate Copy — failures surface via the
+                            // capture-status event in the UI layer.
+                            let _ = keyboard::simulate_copy();
 
                             // 3. Poll for clipboard update (up to 400ms timeout, 30ms polling interval)
                             let mut text = old_text.clone();
