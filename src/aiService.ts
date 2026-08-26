@@ -47,8 +47,16 @@ async function fetchOpenAICompatible(
   });
 
   if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData?.error?.message || `自定义模型 API 请求失败: ${response.status}`);
+    const raw = await response.text().catch(() => "");
+    let detail = "";
+    try {
+      detail = JSON.parse(raw)?.error?.message || "";
+    } catch {
+      detail = raw.slice(0, 200);
+    }
+    throw new Error(
+      `自定义模型 API 请求失败 (${response.status})${detail ? `: ${detail}` : ""}`
+    );
   }
 
   const data = await response.json();
@@ -67,6 +75,15 @@ async function requireCustomConfig(): Promise<{ baseUrl: string; model: string }
     throw new Error("自定义模型未配置 Base URL 或模型名，请进入设置配置！");
   }
   return { baseUrl: keys.customBaseUrl, model: keys.customModel };
+}
+
+// Guard against context-length 400s on small-context models: cap the
+// captured text before it enters any prompt.
+const MAX_CAPTURE_CHARS = 6000;
+
+function clampText(text: string): string {
+  if (text.length <= MAX_CAPTURE_CHARS) return text;
+  return text.slice(0, MAX_CAPTURE_CHARS) + "\n…（选区过长，已截断）";
 }
 
 async function getActiveApiKey(activeModel: string): Promise<string> {
@@ -89,6 +106,7 @@ async function getActiveApiKey(activeModel: string): Promise<string> {
 }
 
 export async function fetchExplanation(text: string, mode: "general" | "expert" = "general"): Promise<ExplanationResult> {
+  text = clampText(text);
   const prompt = mode === "expert" ? EXPERT_PROMPT : GENERAL_PROMPT;
   const keys = await loadApiKeys();
   const activeModel = keys?.defaultModel || "gemini";
@@ -214,6 +232,7 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
 }
 
 export async function fetchChatExplanation(history: ChatMessage[], mode: "general" | "expert" = "general"): Promise<ExplanationResult> {
+  history = history.map((msg) => ({ ...msg, content: clampText(msg.content) }));
   const prompt = mode === "expert" ? EXPERT_PROMPT : GENERAL_PROMPT;
   const keys = await loadApiKeys();
   const activeModel = keys?.defaultModel || "gemini";
@@ -342,6 +361,7 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
 }
 
 export async function verifyIntent(text: string): Promise<boolean> {
+  text = clampText(text);
   const keys = await loadApiKeys();
   const activeModel = keys?.defaultModel || "gemini";
   const apiKey = await getActiveApiKey(activeModel);
