@@ -99,22 +99,6 @@ function App() {
     }
   };
 
-  // Reliable OS-level drag for macOS: interactive widgets opt out,
-  // everything else on the card starts a native window drag.
-  const handleDialogMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    if (!/Mac/i.test(navigator.platform)) return;
-    const target = e.target as HTMLElement;
-    if (
-      target.closest(
-        "input, button, textarea, .chat-messages-scroll-area, .follow-up-form, .toggle-switch"
-      )
-    ) {
-      return;
-    }
-    invoke("begin_window_drag");
-  };
-
   useEffect(() => {
     // 1. Load settings on startup with timeout protection
     const checkOnboarding = async () => {
@@ -506,7 +490,7 @@ function App() {
   // 正常待命交互页 (Stage 1 / 2)
   return (
     <div className="window-container">
-      <div className="pixel-dialog" data-tauri-drag-region onMouseDown={handleDialogMouseDown}>
+      <div className="pixel-dialog" data-tauri-drag-region>
         {/* Hided .pixel-header in active mode to make it a pure floating card */}
 
         {/* Slim always-visible drag handle */}
