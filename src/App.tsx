@@ -78,6 +78,7 @@ function App() {
   const [mode, setMode] = useState<"general" | "expert">("general");
   const modeRef = useRef<"general" | "expert">("general");
   const isOnboardedRef = useRef<boolean>(false);
+  const [refused, setRefused] = useState<boolean>(false);
   const [latestTokens, setLatestTokens] = useState<number | null>(null);
 
   useEffect(() => {
@@ -94,14 +95,17 @@ function App() {
     setStatusMsg("正在验证意图...");
     setIsLoading(true);
     setError(null);
+    setRefused(false);
     setChatHistory([]); // Clear past history for new conversation
     setLatestTokens(null);
 
     try {
       const isTechnical = await verifyIntent(text);
       if (!isTechnical) {
-        setError("此处内容非技术逻辑，WutZit 拒接受理");
-        setStatusMsg("验证拒绝！");
+        // Not an API failure: show a friendly note instead of the
+        // scary error card with its "modify API key" button.
+        setRefused(true);
+        setStatusMsg("非技术内容");
         return;
       }
 
@@ -620,7 +624,14 @@ function App() {
 
               {/* 中间的内容滚动区 */}
               <div className="chat-messages-scroll-area" id="chat-messages-container">
-                {error && chatHistory.length === 0 ? (
+                {refused ? (
+                  <div className="chat-message assistant">
+                    <span className="message-sender">👼 小天使</span>
+                    <div className="message-text">
+                      这里看起来不是代码或技术内容哦～ 选一段代码或技术名词再按快捷键，我就能帮你解释啦。
+                    </div>
+                  </div>
+                ) : error && chatHistory.length === 0 ? (
                   <div className="error-message">
                     <p className="error-title">⚠️ 魔法失败 (Error)</p>
                     <p className="bubble-text">{error}</p>
