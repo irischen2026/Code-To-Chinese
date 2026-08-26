@@ -93,8 +93,26 @@ pub fn simulate_copy() {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+pub fn simulate_copy() -> Result<(), String> {
+    // System Events keystroke: same Accessibility gate as CGEvent posting,
+    // but failures return a real error message instead of dropping events
+    // silently.
+    const SCRIPT: &str =
+        r#"tell application "System Events" to keystroke "c" using command down"#;
+    let output = std::process::Command::new("osascript")
+        .args(["-e", SCRIPT])
+        .output()
+        .map_err(|e| format!("failed to spawn osascript: {e}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn simulate_copy() {
-    // macOS / Linux copy simulation fallback placeholder
+    // Linux / other platforms placeholder
     eprintln!("Clipboard copy simulation is not implemented for this platform yet.");
 }
