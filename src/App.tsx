@@ -77,7 +77,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"general" | "expert">("general");
   const modeRef = useRef<"general" | "expert">("general");
-  const [captureOk, setCaptureOk] = useState<{ ok: boolean; trusted: boolean } | null>(null);
+  const [captureOk, setCaptureOk] = useState<{ ok: boolean; trusted: boolean; detail: string } | null>(null);
   const [latestTokens, setLatestTokens] = useState<number | null>(null);
 
   useEffect(() => {
@@ -163,7 +163,7 @@ function App() {
     // Listen to the capture result: ok=false means the simulated copy did not
     // update the clipboard (missing Accessibility permission, or a grant that
     // only takes effect after restarting the app).
-    const unlistenStatusPromise = listen<{ ok: boolean; trusted: boolean }>("capture-status", (event) => {
+    const unlistenStatusPromise = listen<{ ok: boolean; trusted: boolean; detail: string }>("capture-status", (event) => {
       setCaptureOk(event.payload);
     });
 
@@ -509,7 +509,7 @@ function App() {
           {capturedText && captureOk && !captureOk.ok && (
             <div className="capture-warning">
               {captureOk.trusted
-                ? "⚠️ 已授权但模拟 ⌘C 未生效：请托盘图标右键 → 退出，重新打开应用后再划词。"
+                ? `⚠️ 已授权但模拟 ⌘C 未生效${captureOk.detail ? `：${captureOk.detail}` : ""}。请托盘图标右键 → 退出，重新打开应用后再划词。`
                 : "⚠️ 需要辅助功能权限：系统设置 → 隐私与安全性 → 辅助功能 → 打开 CodeToChinese 开关，然后完全退出并重新打开应用。"}
             </div>
           )}

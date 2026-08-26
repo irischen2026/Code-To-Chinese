@@ -10,6 +10,23 @@ struct AppState {
     is_config_mode: AtomicBool,
 }
 
+#[derive(Clone, serde::Serialize)]
+struct CaptureStatus {
+    ok: bool,
+    trusted: bool,
+    detail: String,
+}
+
+#[cfg(target_os = "macos")]
+fn is_accessibility_trusted() -> bool {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        // Returns a CoreFoundation Boolean (unsigned char).
+        fn AXIsProcessTrusted() -> u8;
+    }
+    unsafe { AXIsProcessTrusted() != 0 }
+}
+
 #[tauri::command]
 fn set_config_mode(state: tauri::State<'_, AppState>, active: bool) {
     state.is_config_mode.store(active, std::sync::atomic::Ordering::Relaxed);
@@ -33,13 +50,22 @@ pub fn run() {
                             // 1. Read old clipboard content
                             let old_text = app.clipboard().read_text().unwrap_or_default();
 
-                            // 2. Simulate Copy
-                            keyboard::simulate_copy();
+                            // 2. Simulate Copy — on macOS the osascript stderr
+                            // is captured so failures surface in the UI
+                            // instead of silently using stale content.
+                            #[cfg(target_os = "macos")]
+                            let copy_detail: Option<String> = match keyboard::simulate_copy() {
+                                Ok(()) => None,
+                                Err(e) => Some(e),
+                            };
+                            #[cfg(not(target_os = "macos"))]
+                            let copy_detail: Option<String> = None;
 
-                            // 3. Poll for clipboard update (up to 400ms timeout, 30ms polling interval)
+                            // 3. Poll for clipboard update (up to 900ms to cover
+                            // osascript cold starts; 30ms polling interval)
                             let mut text = old_text.clone();
                             let start_time = std::time::Instant::now();
-                            let timeout = std::time::Duration::from_millis(400);
+                            let timeout = std::time::Duration::from_millis(900);
                             let poll_interval = std::time::Duration::from_millis(30);
 
                             while start_time.elapsed() < timeout {
@@ -108,8 +134,17 @@ pub fn run() {
                                     let _ = window.set_focus();
 
                                     // 7. Emit text to frontend, plus whether the
-                                    // simulated copy actually updated the clipboard
-                                    let _ = window.emit("capture-status", text != old_text);
+                                    // simulated copy actually updated the clipboard,
+                                    // whether macOS currently trusts this process
+                                    // for accessibility, and any osascript error.
+                                    let _ = window.emit(
+                                        "capture-status",
+                                        CaptureStatus {
+                                            ok: text != old_text,
+                                            trusted: is_accessibility_trusted(),
+                                            detail: copy_detail.unwrap_or_default(),
+                                        },
+                                    );
                                     let _ = window.emit("selection-captured", text);
                                 }
                             }
