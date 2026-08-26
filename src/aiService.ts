@@ -30,7 +30,8 @@ async function fetchOpenAICompatible(
   model: string,
   messages: { role: "system" | "user" | "assistant"; content: string }[],
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  extra: Record<string, unknown> | null = null
 ): Promise<ExplanationResult> {
   const response = await fetch(buildChatCompletionsUrl(baseUrl), {
     method: "POST",
@@ -42,7 +43,8 @@ async function fetchOpenAICompatible(
       model,
       messages,
       temperature,
-      max_tokens: maxTokens
+      max_tokens: maxTokens,
+      ...(extra || {})
     })
   });
 
@@ -69,12 +71,29 @@ async function fetchOpenAICompatible(
   };
 }
 
-async function requireCustomConfig(): Promise<{ baseUrl: string; model: string }> {
+// In general mode the user wants fast answers, so any thinking-disabling
+// extras configured for the custom provider are applied; expert mode keeps
+// the model's full default capability.
+async function requireCustomConfig(fastThinking: boolean): Promise<{
+  baseUrl: string;
+  model: string;
+  extra: Record<string, unknown> | null;
+}> {
   const keys = await loadApiKeys();
   if (!keys?.customBaseUrl || !keys?.customModel) {
     throw new Error("自定义模型未配置 Base URL 或模型名，请进入设置配置！");
   }
-  return { baseUrl: keys.customBaseUrl, model: keys.customModel };
+
+  let extra: Record<string, unknown> | null = null;
+  const raw = (keys.customExtraJson || "").trim();
+  if (fastThinking && raw) {
+    try {
+      extra = JSON.parse(raw);
+    } catch {
+      throw new Error("附加参数不是合法 JSON，请进入设置修正！");
+    }
+  }
+  return { baseUrl: keys.customBaseUrl, model: keys.customModel, extra };
 }
 
 // Guard against context-length 400s on small-context models: cap the
@@ -214,7 +233,7 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
   }
 
   if (activeModel === "custom") {
-    const { baseUrl, model } = await requireCustomConfig();
+    const { baseUrl, model, extra } = await requireCustomConfig(mode === "general");
     return fetchOpenAICompatible(
       baseUrl,
       apiKey,
@@ -224,7 +243,8 @@ export async function fetchExplanation(text: string, mode: "general" | "expert" 
         { role: "user", content: text }
       ],
       0.5,
-      800
+      800,
+      extra
     );
   }
 
@@ -343,7 +363,7 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
   }
 
   if (activeModel === "custom") {
-    const { baseUrl, model } = await requireCustomConfig();
+    const { baseUrl, model, extra } = await requireCustomConfig(mode === "general");
     return fetchOpenAICompatible(
       baseUrl,
       apiKey,
@@ -353,14 +373,15 @@ export async function fetchChatExplanation(history: ChatMessage[], mode: "genera
         ...history.map((msg) => ({ role: msg.role, content: msg.content }))
       ],
       0.5,
-      800
+      800,
+      extra
     );
   }
 
   throw new Error(`未知的模型类型: ${activeModel}`);
 }
 
-export async function verifyIntent(text: string): Promise<boolean> {
+export async function verifyIntent(text: string, fastThinking = false): Promise<boolean> {
   text = clampText(text);
   const keys = await loadApiKeys();
   const activeModel = keys?.defaultModel || "gemini";
@@ -458,7 +479,7 @@ export async function verifyIntent(text: string): Promise<boolean> {
   }
 
   if (activeModel === "custom") {
-    const { baseUrl, model } = await requireCustomConfig();
+    const { baseUrl, model, extra } = await requireCustomConfig(fastThinking);
     const result = await fetchOpenAICompatible(
       baseUrl,
       apiKey,
@@ -468,7 +489,8 @@ export async function verifyIntent(text: string): Promise<boolean> {
         { role: "user", content: text }
       ],
       0.1,
-      5
+      5,
+      extra
     );
     return result.text.trim().toUpperCase().includes("YES");
   }

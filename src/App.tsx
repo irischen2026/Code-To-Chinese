@@ -131,6 +131,7 @@ function App() {
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [customKey, setCustomKey] = useState("");
   const [customModelName, setCustomModelName] = useState("");
+  const [customExtraJson, setCustomExtraJson] = useState("");
   const [selectedModel, setSelectedModel] = useState<"gemini" | "deepseek" | "openai" | "custom">("gemini");
 
   const handleOpenLink = async (e: React.MouseEvent, url: string) => {
@@ -140,6 +141,22 @@ function App() {
     } catch (err) {
       console.error("Failed to open URL:", err);
     }
+  };
+
+  // Reliable OS-level drag for macOS: interactive widgets opt out,
+  // everything else on the card starts a native window drag.
+  const handleDialogMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if (!/Mac/i.test(navigator.platform)) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(
+        "input, button, textarea, .bento-box, .chat-messages-scroll-area, .follow-up-form, .toggle-switch"
+      )
+    ) {
+      return;
+    }
+    invoke("begin_window_drag");
   };
 
   useEffect(() => {
@@ -165,6 +182,7 @@ function App() {
           setCustomBaseUrl(keys.customBaseUrl || "");
           setCustomKey(keys.customApiKey || "");
           setCustomModelName(keys.customModel || "");
+          setCustomExtraJson(keys.customExtraJson || "");
           setIsOnboarded(true);
           await invoke("set_config_mode", { active: false });
         } else {
@@ -240,6 +258,16 @@ function App() {
       return;
     }
 
+    const trimmedExtra = customExtraJson.trim();
+    if (trimmedExtra) {
+      try {
+        JSON.parse(trimmedExtra);
+      } catch {
+        alert("附加参数不是合法 JSON，请检查格式（示例：{\"enable_thinking\": false}）");
+        return;
+      }
+    }
+
     const cleanGemini = geminiKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanDeepseek = deepseekKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanOpenai = openaiKey.trim().replace(/[^\x21-\x7E]/g, "");
@@ -254,6 +282,7 @@ function App() {
       customBaseUrl: hasCustomConfig ? cleanCustomBaseUrl : "",
       customApiKey: hasCustomConfig ? cleanCustomKey : "",
       customModel: hasCustomConfig ? cleanCustomModelName : "",
+      customExtraJson: hasCustomConfig ? trimmedExtra : "",
       defaultModel: selectedModel,
     };
 
@@ -357,7 +386,7 @@ function App() {
   if (!isOnboarded) {
     return (
       <div className="window-container">
-        <div className="pixel-dialog">
+        <div className="pixel-dialog" onMouseDown={handleDialogMouseDown}>
           <div className="pixel-header" data-tauri-drag-region>
             <div className="pixel-title" data-tauri-drag-region>
               <span className="mascot-emoji" data-tauri-drag-region>👼</span>
@@ -529,6 +558,14 @@ function App() {
                 onChange={(e) => setCustomModelName(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
               />
+              <input
+                type="text"
+                className="pixel-input"
+                placeholder={'附加参数(可选)，如 {"enable_thinking": false}'}
+                value={customExtraJson}
+                onChange={(e) => setCustomExtraJson(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
             </div>
 
@@ -559,7 +596,7 @@ function App() {
   // 正常待命交互页 (Stage 1 / 2)
   return (
     <div className="window-container">
-      <div className="pixel-dialog" data-tauri-drag-region>
+      <div className="pixel-dialog" data-tauri-drag-region onMouseDown={handleDialogMouseDown}>
         {/* Hided .pixel-header in active mode to make it a pure floating card */}
         
         <div className="pixel-body" data-tauri-drag-region>

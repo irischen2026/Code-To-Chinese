@@ -16,6 +16,7 @@ export interface ApiKeys {
   customBaseUrl?: string;
   customApiKey?: string;
   customModel?: string;
+  customExtraJson?: string;
   defaultModel?: "gemini" | "deepseek" | "openai" | "custom";
 }
 
@@ -49,6 +50,7 @@ export async function loadApiKeys(): Promise<ApiKeys | null> {
     customBaseUrl: keys?.customBaseUrl || envCustomBaseUrl,
     customApiKey: keys?.customApiKey || envCustomApiKey,
     customModel: keys?.customModel || envCustomModel,
+    customExtraJson: keys?.customExtraJson || "",
     defaultModel: keys?.defaultModel || (envDefaultModel as ApiKeys["defaultModel"]),
   };
 
