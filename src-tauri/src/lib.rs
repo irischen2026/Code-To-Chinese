@@ -10,6 +10,23 @@ struct AppState {
     is_config_mode: AtomicBool,
 }
 
+#[derive(Clone, serde::Serialize)]
+struct CaptureStatus {
+    ok: bool,
+    trusted: bool,
+    detail: String,
+}
+
+#[cfg(target_os = "macos")]
+fn is_accessibility_trusted() -> bool {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        // Returns a CoreFoundation Boolean (unsigned char).
+        fn AXIsProcessTrusted() -> u8;
+    }
+    unsafe { AXIsProcessTrusted() != 0 }
+}
+
 #[tauri::command]
 fn set_config_mode(state: tauri::State<'_, AppState>, active: bool) {
     state.is_config_mode.store(active, std::sync::atomic::Ordering::Relaxed);
@@ -17,7 +34,7 @@ fn set_config_mode(state: tauri::State<'_, AppState>, active: bool) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(AppState { is_config_mode: AtomicBool::new(true) })
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -33,23 +50,70 @@ pub fn run() {
                             // 1. Read old clipboard content
                             let old_text = app.clipboard().read_text().unwrap_or_default();
 
-                            // 2. Simulate Copy
-                            keyboard::simulate_copy();
+                            // 1b. Plant a clipboard sentinel (macOS): plain
+                            // change-detection false-fails when the user
+                            // re-selects text identical to what the clipboard
+                            // already holds.
+                            #[cfg(target_os = "macos")]
+                            let _ = app.clipboard().write_text("__CODE2CHINESE_SENTINEL__");
+                            #[cfg(target_os = "macos")]
+                            let needle: String = "__CODE2CHINESE_SENTINEL__".to_string();
+                            #[cfg(not(target_os = "macos"))]
+                            let needle: String = old_text.clone();
 
-                            // 3. Poll for clipboard update (up to 400ms timeout, 30ms polling interval)
+                            // 2. Fast path: CGEvent with explicit Command flags —
+                            // immune to physically-held modifiers (e.g. Option
+                            // from Alt+Q). Non-macOS keeps the direct call.
+                            #[cfg(target_os = "macos")]
+                            keyboard::simulate_copy_fast();
+                            #[cfg(not(target_os = "macos"))]
+                            let _ = keyboard::simulate_copy();
+
+                            #[cfg(target_os = "macos")]
+                            let mut copy_detail: Option<String> = None;
+                            #[cfg(not(target_os = "macos"))]
+                            let copy_detail: Option<String> = None;
+                            #[cfg(target_os = "macos")]
+                            let mut fallback_fired = false;
+
+                            // 3. Poll for clipboard update: the fast path gets
+                            // 350ms, then the osascript fallback fires once and
+                            // polling continues up to 900ms total (30ms steps).
                             let mut text = old_text.clone();
+                            let mut captured = false;
                             let start_time = std::time::Instant::now();
-                            let timeout = std::time::Duration::from_millis(400);
                             let poll_interval = std::time::Duration::from_millis(30);
+                            let fast_deadline = std::time::Duration::from_millis(350);
+                            let timeout = std::time::Duration::from_millis(900);
 
-                            while start_time.elapsed() < timeout {
+                            loop {
+                                if start_time.elapsed() >= timeout {
+                                    break;
+                                }
                                 std::thread::sleep(poll_interval);
                                 if let Ok(current_text) = app.clipboard().read_text() {
-                                    if current_text != old_text {
+                                    if !current_text.is_empty() && current_text != needle {
                                         text = current_text;
+                                        captured = true;
                                         break;
                                     }
                                 }
+                                #[cfg(target_os = "macos")]
+                                if start_time.elapsed() >= fast_deadline && !fallback_fired {
+                                    fallback_fired = true;
+                                    copy_detail = match keyboard::simulate_copy() {
+                                        Ok(()) => None,
+                                        Err(e) => Some(e),
+                                    };
+                                }
+                            }
+
+                            // Restore the pre-shortcut clipboard when nothing
+                            // was captured in time.
+                            #[cfg(target_os = "macos")]
+                            if text == "__CODE2CHINESE_SENTINEL__" {
+                                text = old_text.clone();
+                                let _ = app.clipboard().write_text(&old_text);
                             }
 
                             // 4. Get cursor position
@@ -107,7 +171,18 @@ pub fn run() {
                                     let _ = window.show();
                                     let _ = window.set_focus();
 
-                                    // 7. Emit text to frontend
+                                    // 7. Emit text to frontend, plus whether the
+                                    // simulated copy actually updated the clipboard,
+                                    // whether macOS currently trusts this process
+                                    // for accessibility, and any osascript error.
+                                    let _ = window.emit(
+                                        "capture-status",
+                                        CaptureStatus {
+                                            ok: captured,
+                                            trusted: is_accessibility_trusted(),
+                                            detail: copy_detail.unwrap_or_default(),
+                                        },
+                                    );
                                     let _ = window.emit("selection-captured", text);
                                 }
                             }
@@ -153,9 +228,64 @@ pub fn run() {
                 });
             }
 
+            // Tray icon: left-click shows the main window,
+            // right-click menu offers Show / Quit.
+            {
+                use tauri::{
+                    menu::{Menu, MenuItem},
+                    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+                };
+
+                let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show, &quit])?;
+
+                TrayIconBuilder::new()
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .tooltip("CodeToChinese")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            if let Some(window) = tray.app_handle().get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    })
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .build(app)?;
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![set_config_mode])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        // macOS: show the main window when the Dock icon is clicked
+        if let tauri::RunEvent::Reopen { .. } = event {
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+    });
 }
