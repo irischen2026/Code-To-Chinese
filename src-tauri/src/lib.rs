@@ -80,6 +80,7 @@ pub fn run() {
                             // 350ms, then the osascript fallback fires once and
                             // polling continues up to 900ms total (30ms steps).
                             let mut text = old_text.clone();
+                            let mut captured = false;
                             let start_time = std::time::Instant::now();
                             let poll_interval = std::time::Duration::from_millis(30);
                             let fast_deadline = std::time::Duration::from_millis(350);
@@ -93,6 +94,7 @@ pub fn run() {
                                 if let Ok(current_text) = app.clipboard().read_text() {
                                     if !current_text.is_empty() && current_text != needle {
                                         text = current_text;
+                                        captured = true;
                                         break;
                                     }
                                 }
@@ -111,6 +113,7 @@ pub fn run() {
                             #[cfg(target_os = "macos")]
                             if text == "__CODE2CHINESE_SENTINEL__" {
                                 text = old_text.clone();
+                                let _ = app.clipboard().write_text(&old_text);
                             }
 
                             // 4. Get cursor position
@@ -175,7 +178,7 @@ pub fn run() {
                                     let _ = window.emit(
                                         "capture-status",
                                         CaptureStatus {
-                                            ok: text != old_text,
+                                            ok: captured,
                                             trusted: is_accessibility_trusted(),
                                             detail: copy_detail.unwrap_or_default(),
                                         },
