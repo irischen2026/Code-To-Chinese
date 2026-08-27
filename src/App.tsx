@@ -130,7 +130,6 @@ function App() {
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [customKey, setCustomKey] = useState("");
   const [customModelName, setCustomModelName] = useState("");
-  const [customExtraJson, setCustomExtraJson] = useState("");
   const [selectedModel, setSelectedModel] = useState<"gemini" | "deepseek" | "openai" | "custom">("gemini");
 
   const handleOpenLink = async (e: React.MouseEvent, url: string) => {
@@ -181,7 +180,6 @@ function App() {
           setCustomBaseUrl(keys.customBaseUrl || "");
           setCustomKey(keys.customApiKey || "");
           setCustomModelName(keys.customModel || "");
-          setCustomExtraJson(keys.customExtraJson || "");
           setIsOnboarded(true);
           await invoke("set_config_mode", { active: false });
         } else {
@@ -257,16 +255,6 @@ function App() {
       return;
     }
 
-    const trimmedExtra = customExtraJson.trim();
-    if (trimmedExtra) {
-      try {
-        JSON.parse(trimmedExtra);
-      } catch {
-        alert("附加参数不是合法 JSON，请检查格式（示例：{\"enable_thinking\": false}）");
-        return;
-      }
-    }
-
     const cleanGemini = geminiKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanDeepseek = deepseekKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanOpenai = openaiKey.trim().replace(/[^\x21-\x7E]/g, "");
@@ -281,7 +269,6 @@ function App() {
       customBaseUrl: hasCustomConfig ? cleanCustomBaseUrl : "",
       customApiKey: hasCustomConfig ? cleanCustomKey : "",
       customModel: hasCustomConfig ? cleanCustomModelName : "",
-      customExtraJson: hasCustomConfig ? trimmedExtra : "",
       defaultModel: selectedModel,
     };
 
@@ -555,14 +542,6 @@ function App() {
                 placeholder="模型名，如 moonshot-v1-8k"
                 value={customModelName}
                 onChange={(e) => setCustomModelName(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <input
-                type="text"
-                className="pixel-input"
-                placeholder={'附加参数(可选)，如 {"enable_thinking": false}'}
-                value={customExtraJson}
-                onChange={(e) => setCustomExtraJson(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
