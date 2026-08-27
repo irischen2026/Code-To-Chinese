@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { loadApiKeys, saveApiKeys, ApiKeys } from "./store";
-import { fetchExplanation, fetchChatExplanation, ChatMessage, verifyIntent } from "./aiService";
+import { fetchExplanation, fetchChatExplanation, ChatMessage } from "./aiService";
 import "./App.css";
 
 // 全局 JS 错误诊断横幅 (仅在 JS 崩溃时动态创建显示，正常情况下不占用 DOM)
@@ -77,17 +77,60 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"general" | "expert">("general");
   const modeRef = useRef<"general" | "expert">("general");
+  const isOnboardedRef = useRef<boolean>(false);
+  const [refused, setRefused] = useState<boolean>(false);
   const [latestTokens, setLatestTokens] = useState<number | null>(null);
 
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
 
+  useEffect(() => {
+    if (isOnboarded !== null) {
+      isOnboardedRef.current = isOnboarded;
+    }
+  }, [isOnboarded]);
+
+  const runExplanation = async (text: string, currentMode: "general" | "expert") => {
+    const t0 = Date.now();
+    setStatusMsg(currentMode === "expert" ? "专家审计中..." : "正在思考中...");
+    setIsLoading(true);
+    setError(null);
+    setRefused(false);
+    setChatHistory([]); // Clear past history for new conversation
+    setLatestTokens(null);
+
+    try {
+      const result = await fetchExplanation(text, currentMode);
+      if (result.refused) {
+        // The model flagged the selection as non-technical in the same
+        // request — show a friendly note instead of an explanation.
+        setRefused(true);
+        setStatusMsg("非技术内容");
+        return;
+      }
+
+      setChatHistory([
+        { role: "assistant", content: result.text }
+      ]);
+      setLatestTokens(result.totalTokens || null);
+      setStatusMsg(`解码完毕！耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    } catch (err: any) {
+      setError(err?.message || "网络请求失败，请检查配置与网络连接。");
+      setStatusMsg("解码失败！");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Temporary state for the Onboarding form
   const [geminiKey, setGeminiKey] = useState("");
   const [deepseekKey, setDeepseekKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState<"gemini" | "deepseek" | "openai">("gemini");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customKey, setCustomKey] = useState("");
+  const [customModelName, setCustomModelName] = useState("");
+  const [selectedModel, setSelectedModel] = useState<"gemini" | "deepseek" | "openai" | "custom">("gemini");
 
   const handleOpenLink = async (e: React.MouseEvent, url: string) => {
     e.stopPropagation(); // Prevent card selection click bubbling
@@ -96,6 +139,22 @@ function App() {
     } catch (err) {
       console.error("Failed to open URL:", err);
     }
+  };
+
+  // Reliable OS-level drag for macOS: interactive widgets opt out,
+  // everything else on the card starts a native window drag.
+  const handleDialogMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if (!/Mac/i.test(navigator.platform)) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(
+        "input, button, textarea, .bento-box, .chat-messages-scroll-area, .follow-up-form, .toggle-switch"
+      )
+    ) {
+      return;
+    }
+    invoke("begin_window_drag");
   };
 
   useEffect(() => {
@@ -110,8 +169,17 @@ function App() {
           loadApiKeys(),
           timeoutPromise
         ]);
-        if (keys && (keys.gemini || keys.deepseek || keys.openai)) {
+        if (keys && (keys.gemini || keys.deepseek || keys.openai || (keys.customBaseUrl && keys.customApiKey && keys.customModel))) {
           setApiKeys(keys);
+          // Reflect the persisted configuration so re-saving doesn't wipe
+          // other providers' keys and the correct provider stays selected.
+          setSelectedModel(keys.defaultModel || "gemini");
+          setGeminiKey(keys.gemini || "");
+          setDeepseekKey(keys.deepseek || "");
+          setOpenaiKey(keys.openai || "");
+          setCustomBaseUrl(keys.customBaseUrl || "");
+          setCustomKey(keys.customApiKey || "");
+          setCustomModelName(keys.customModel || "");
           setIsOnboarded(true);
           await invoke("set_config_mode", { active: false });
         } else {
@@ -129,34 +197,13 @@ function App() {
 
     // 2. Listen to selection captured event
     const unlistenPromise = listen<string>("selection-captured", async (event) => {
-      const text = event.payload;
-      setCapturedText(text);
-      setStatusMsg("正在验证意图...");
-      setIsLoading(true);
-      setError(null);
-      setChatHistory([]); // Clear past history for new conversation
-      
-      try {
-        const isTechnical = await verifyIntent(text);
-        if (!isTechnical) {
-          setError("此处内容非技术逻辑，WutZit 拒接受理");
-          setStatusMsg("验证拒绝！");
-          return;
-        }
-
-        setStatusMsg(modeRef.current === "expert" ? "正在进入专家级审计，运算深度增加..." : "正在思考中...");
-        const result = await fetchExplanation(text, modeRef.current);
-        setChatHistory([
-          { role: "assistant", content: result.text }
-        ]);
-        setLatestTokens(result.totalTokens || null);
-        setStatusMsg("解码完毕！");
-      } catch (err: any) {
-        setError(err?.message || "网络请求失败，请检查配置与网络连接。");
-        setStatusMsg("解码失败！");
-      } finally {
-        setIsLoading(false);
-      }
+      setCapturedText(event.payload);
+      // Before activation there is no provider to query: just keep the
+      // captured text — the post-activation retry sends it once settings
+      // are saved, instead of surfacing a guaranteed "no API key" error
+      // on every first run.
+      if (!isOnboardedRef.current) return;
+      runExplanation(event.payload, modeRef.current);
     });
 
     return () => {
@@ -194,27 +241,47 @@ function App() {
 
   const handleSaveOnboarding = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!geminiKey && !deepseekKey && !openaiKey) {
-      alert("请至少配置一个模型的 API Key 才能激活小天使！");
+    const hasCustomConfig =
+      customBaseUrl.trim().length > 0 &&
+      customKey.trim().length > 0 &&
+      customModelName.trim().length > 0;
+
+    if (!geminiKey && !deepseekKey && !openaiKey && !hasCustomConfig) {
+      alert("请至少配置一个模型的 API Key（或完整的自定义端点）才能激活小天使！");
+      return;
+    }
+    if (selectedModel === "custom" && !hasCustomConfig) {
+      alert("选择自定义模式时，Base URL、API Key、模型名 三项都需要填写！");
       return;
     }
 
     const cleanGemini = geminiKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanDeepseek = deepseekKey.trim().replace(/[^\x21-\x7E]/g, "");
     const cleanOpenai = openaiKey.trim().replace(/[^\x21-\x7E]/g, "");
+    const cleanCustomBaseUrl = customBaseUrl.trim().replace(/[^\x21-\x7E]/g, "");
+    const cleanCustomKey = customKey.trim().replace(/[^\x21-\x7E]/g, "");
+    const cleanCustomModelName = customModelName.trim().replace(/[^\x21-\x7E]/g, "");
 
     const keys: ApiKeys = {
       gemini: cleanGemini,
       deepseek: cleanDeepseek,
       openai: cleanOpenai,
+      customBaseUrl: hasCustomConfig ? cleanCustomBaseUrl : "",
+      customApiKey: hasCustomConfig ? cleanCustomKey : "",
+      customModel: hasCustomConfig ? cleanCustomModelName : "",
       defaultModel: selectedModel,
     };
 
     try {
       await saveApiKeys(keys);
       setApiKeys(keys);
+      setError(null);
       setIsOnboarded(true);
       await invoke("set_config_mode", { active: false });
+      // Auto-retry the text captured before first-time activation
+      if (capturedText.trim().length > 0) {
+        runExplanation(capturedText, mode);
+      }
     } catch (err) {
       alert("保存设置失败，请稍后重试！");
       console.error(err);
@@ -282,32 +349,9 @@ function App() {
     setMode(newMode);
     setChatHistory([]);
     setLatestTokens(null);
-    
-    if (capturedText) {
-      setStatusMsg("正在验证意图...");
-      setIsLoading(true);
-      setError(null);
-      try {
-        const isTechnical = await verifyIntent(capturedText);
-        if (!isTechnical) {
-          setError("此处内容非技术逻辑，WutZit 拒接受理");
-          setStatusMsg("验证拒绝！");
-          return;
-        }
 
-        setStatusMsg(newMode === "expert" ? "正在进入专家级审计，运算深度增加..." : "正在思考中...");
-        const result = await fetchExplanation(capturedText, newMode);
-        setChatHistory([
-          { role: "assistant", content: result.text }
-        ]);
-        setLatestTokens(result.totalTokens || null);
-        setStatusMsg("解码完毕！");
-      } catch (err: any) {
-        setError(err?.message || "网络请求失败，请检查配置与网络连接。");
-        setStatusMsg("解码失败！");
-      } finally {
-        setIsLoading(false);
-      }
+    if (capturedText) {
+      runExplanation(capturedText, newMode);
     }
   };
 
@@ -328,7 +372,7 @@ function App() {
   if (!isOnboarded) {
     return (
       <div className="window-container">
-        <div className="pixel-dialog">
+        <div className="pixel-dialog" onMouseDown={handleDialogMouseDown}>
           <div className="pixel-header" data-tauri-drag-region>
             <div className="pixel-title" data-tauri-drag-region>
               <span className="mascot-emoji" data-tauri-drag-region>👼</span>
@@ -339,7 +383,8 @@ function App() {
             </button>
           </div>
 
-          <form onSubmit={handleSaveOnboarding} className="pixel-body bento-grid">
+          <form onSubmit={handleSaveOnboarding} className="pixel-body">
+            <div className="bento-grid">
             {/* Bento Box 1: Welcome & Intro (Spans 2 columns) */}
             <div className="bento-box intro-box">
               <h2 className="pixel-subtitle">欢迎！激活我的魔法能力 🌟</h2>
@@ -456,7 +501,53 @@ function App() {
               />
             </div>
 
-            {/* Bento Box 5: Save & Activate Button */}
+            {/* Bento Box 4b: Custom OpenAI-compatible endpoint */}
+            <div
+              className={`bento-box model-box ${
+                selectedModel === "custom" ? "active-model" : ""
+              }`}
+              onClick={() => setSelectedModel("custom")}
+            >
+              <div className="box-title">
+                <span>🔧 自定义 (OpenAI 兼容)</span>
+                <input
+                  type="radio"
+                  name="default_model"
+                  checked={selectedModel === "custom"}
+                  onChange={() => setSelectedModel("custom")}
+                />
+              </div>
+              <div className="box-guide">
+                <span className="guide-link">Kimi / 硅基流动 / OpenRouter / Ollama 等</span>
+              </div>
+              <input
+                type="text"
+                className="pixel-input"
+                placeholder="Base URL，如 https://api.siliconflow.cn/v1"
+                value={customBaseUrl}
+                onChange={(e) => setCustomBaseUrl(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <input
+                type="password"
+                className="pixel-input"
+                placeholder="API Key，如 sk-..."
+                value={customKey}
+                onChange={(e) => setCustomKey(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <input
+                type="text"
+                className="pixel-input"
+                placeholder="模型名，如 moonshot-v1-8k"
+                value={customModelName}
+                onChange={(e) => setCustomModelName(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            </div>
+
+            {/* Action bar pinned below the scrollable grid */}
             <div className="bento-box action-box">
               <div className="default-indicator">
                 当前激活默认模型:{" "}
@@ -465,7 +556,9 @@ function App() {
                     ? "Gemini"
                     : selectedModel === "deepseek"
                     ? "DeepSeek"
-                    : "OpenAI"}
+                    : selectedModel === "openai"
+                    ? "OpenAI"
+                    : `自定义 (${customModelName || "未填模型名"})`}
                 </strong>
               </div>
               <button type="submit" className="pixel-btn pixel-btn-primary">
@@ -481,7 +574,7 @@ function App() {
   // 正常待命交互页 (Stage 1 / 2)
   return (
     <div className="window-container">
-      <div className="pixel-dialog" data-tauri-drag-region>
+      <div className="pixel-dialog" data-tauri-drag-region onMouseDown={handleDialogMouseDown}>
         {/* Hided .pixel-header in active mode to make it a pure floating card */}
         
         <div className="pixel-body" data-tauri-drag-region>
@@ -546,7 +639,14 @@ function App() {
 
               {/* 中间的内容滚动区 */}
               <div className="chat-messages-scroll-area" id="chat-messages-container">
-                {error && chatHistory.length === 0 ? (
+                {refused ? (
+                  <div className="chat-message assistant">
+                    <span className="message-sender">👼 小天使</span>
+                    <div className="message-text">
+                      这里看起来不是代码或技术内容哦～ 选一段代码或技术名词再按快捷键，我就能帮你解释啦。
+                    </div>
+                  </div>
+                ) : error && chatHistory.length === 0 ? (
                   <div className="error-message">
                     <p className="error-title">⚠️ 魔法失败 (Error)</p>
                     <p className="bubble-text">{error}</p>
@@ -648,7 +748,7 @@ function App() {
             </button>
           </div>
           <div className="footer-right">
-            <span>{statusMsg} | {apiKeys.defaultModel?.toUpperCase()}</span>
+            <span>{statusMsg} | {apiKeys.defaultModel === "custom" ? apiKeys.customModel : apiKeys.defaultModel?.toUpperCase()}</span>
           </div>
         </div>
       </div>

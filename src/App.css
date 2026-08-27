@@ -293,7 +293,9 @@ body,
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  max-height: 520px;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -369,12 +371,16 @@ body,
   background-color: #FDEDEC;
 }
 
-/* Action Box spanning both columns at the bottom */
+/* Action Box pinned below the scrollable grid */
 .action-box {
-  grid-column: span 2;
+  flex-shrink: 0;
   background-color: #EAEDED;
   align-items: center;
   gap: 10px;
+}
+
+.model-box .pixel-input + .pixel-input {
+  margin-top: 8px;
 }
 
 .default-indicator {
